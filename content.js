@@ -22,7 +22,6 @@ function addButtonContainer() {
   container.style.zIndex = "9999";
   container.style.display = "flex";
   container.style.alignItems = "center";
-  container.style.justifyContent = "flex-end";
   container.style.gap = "10px";
 
   const btn = document.createElement("button");
@@ -52,15 +51,18 @@ function addButtonContainer() {
       if (!text) return alert("Буфер пустой!");
 
       const lines = text.trim().split("\n");
-      const dateFields = Array.from(document.querySelectorAll('input[name^="codes"][name$=".connectDate"]'));
 
+      // Вставляем все даты с небольшим сдвигом, чтобы React успел обновить input
       lines.forEach((line, index) => {
-        if (index >= dateFields.length) return;
+        setTimeout(() => {
+          const dateFields = Array.from(document.querySelectorAll('input[name^="codes"][name$=".connectDate"]'));
+          if (index >= dateFields.length) return;
 
-        const match = line.match(/^(\d{2}\.\d{2}\.\d{4})/);
-        if (match) {
-          setReactInputValue(dateFields[index], match[1]);
-        }
+          const match = line.match(/^(\d{2}\.\d{2}\.\d{4})/);
+          if (match) {
+            setReactInputValue(dateFields[index], match[1]);
+          }
+        }, index * 10); // 10ms задержка на каждый input
       });
 
     } catch (e) {
