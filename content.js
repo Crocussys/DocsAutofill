@@ -1,79 +1,58 @@
-async function pasteDatesToConnectFields() {
-  try {
-    const clip = await navigator.clipboard.readText();
-    if (!clip.trim()) {
-      alert("Буфер обмена пустой!");
-      return;
-    }
+function addButton() {
+  // Находим нужный контейнер
+  const container = document.querySelector("div.MuiStack-root");
+  if (!container) return;
 
-    const lines = clip.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  // Проверяем, чтобы кнопка не добавлялась повторно
+  if (document.querySelector("#my-autofill-btn")) return;
 
-    const parsed = lines.map(line => {
-      const match = line.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
-      if (!match) return null;
-      let [_, d, m, y] = match;
-      return `${d.padStart(2, "0")}${m.padStart(2, "0")}${y}`;
-    }).filter(Boolean);
-
-    if (parsed.length === 0) {
-      alert("Не удалось найти даты в буфере обмена.");
-      return;
-    }
-
-    const inputs = document.querySelectorAll('input[name^="codes["][name$=".connectDate"]');
-
-    if (inputs.length === 0) {
-      console.error("Не найдено полей connectDate на странице.");
-      return;
-    }
-
-    let filled = 0;
-    for (let i = 0; i < inputs.length && i < parsed.length; i++) {
-      const input = inputs[i];
-      const date = parsed[i];
-      input.value = date;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-      filled++;
-    }
-
-  } catch (err) {
-    console.error("Ошибка при вставке дат:", err);
-  }
-}
-
-// Добавляем кнопку
-function addPasteButton() {
-  if (document.getElementById("paste-dates-btn")) return;
-
-  const container = document.querySelector("div.MuiStack-root.css-shayf4");
-
-  if (!container) {
-    console.warn("Контейнер .MuiStack-root.css-shayf4 не найден, пробуем позже...");
-    setTimeout(addPasteButton, 1500);
-    return;
-  }
-
+  // Создаём кнопку
   const btn = document.createElement("button");
-  btn.id = "paste-dates-btn";
-  btn.textContent = "Вставить даты";
+  btn.id = "my-autofill-btn";
+  btn.innerText = "Вставить даты";
+  btn.style.marginLeft = "10px";
+  btn.style.padding = "6px 12px";
+  btn.style.cursor = "pointer";
 
-  Object.assign(btn.style, {
-    marginLeft: "10px",
-    padding: "6px 12px",
-    background: "#1976d2",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    fontSize: "14px",
-    cursor: "pointer"
-  });
+  // Добавляем обработчик нажатия
+  btn.onclick = async () => {
+    try {
+      // Читаем текст из буфера обмена
+      const text = await navigator.clipboard.readText();
+      if (!text) return alert("Буфер пустой!");
 
-  btn.addEventListener("click", pasteDatesToConnectFields);
+      // Разбиваем строки
+      const lines = text.trim().split("\n");
+
+      // Находим все поля дат
+      const dateFields = document.querySelectorAll('input[name^="codes"][name$=".connectDate"]');
+
+      lines.forEach((line, index) => {
+        if (index >= dateFields.length) return; // не переписываем лишние поля
+
+        const match = line.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
+        if (match) {
+          const formatted = match[1] + match[2] + match[3];
+          dateFields[index].value = formatted;
+        }
+      });
+
+    } catch (e) {
+      console.error(e);
+      alert("Не удалось прочитать буфер обмена");
+    }
+  };
 
   container.appendChild(btn);
 }
 
-window.addEventListener("load", () => {
-  setTimeout(addPasteButton, 1000);
+// MutationObserver для отслеживания изменений DOM
+const observer = new MutationObserver(() => {
+  addButton();
 });
+
+// Начинаем следить за телом документа
+observer.observe(document.body, { childList: true, subtree: true });
+
+// Пытаемся добавить кнопку сразу
+addButton();
