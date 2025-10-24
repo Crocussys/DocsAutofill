@@ -1,34 +1,32 @@
-function addButton() {
-  // Находим нужный контейнер
-  const container = document.querySelector("div.MuiStack-root");
-  if (!container) return;
+function addButtonContainer() {
+  // Проверяем, чтобы контейнер не создавался повторно
+  if (document.querySelector("#my-button-container")) return;
 
-  // Проверяем, чтобы кнопка не добавлялась повторно
-  if (document.querySelector("#my-autofill-btn")) return;
+  // Создаём новый div
+  const container = document.createElement("div");
+  container.id = "my-button-container";
+  container.style.margin = "10px 0";
+  container.style.display = "flex";
+  container.style.alignItems = "center";
 
   // Создаём кнопку
   const btn = document.createElement("button");
   btn.id = "my-autofill-btn";
   btn.innerText = "Вставить даты";
-  btn.style.marginLeft = "10px";
   btn.style.padding = "6px 12px";
   btn.style.cursor = "pointer";
 
-  // Добавляем обработчик нажатия
+  // Добавляем обработчик кнопки
   btn.onclick = async () => {
     try {
-      // Читаем текст из буфера обмена
       const text = await navigator.clipboard.readText();
       if (!text) return alert("Буфер пустой!");
 
-      // Разбиваем строки
       const lines = text.trim().split("\n");
-
-      // Находим все поля дат
       const dateFields = document.querySelectorAll('input[name^="codes"][name$=".connectDate"]');
 
       lines.forEach((line, index) => {
-        if (index >= dateFields.length) return; // не переписываем лишние поля
+        if (index >= dateFields.length) return;
 
         const match = line.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
         if (match) {
@@ -44,15 +42,20 @@ function addButton() {
   };
 
   container.appendChild(btn);
+
+  const beforeDiv = document.querySelector("div.MuiTableHead-root.HeaderRow.MuiBox-root.css-1o4pfy6");
+  const afterDiv = document.querySelector("div.ReactVirtualized__Grid.ReactVirtualized__List");
+
+  if (beforeDiv && afterDiv) {
+    beforeDiv.parentNode.insertBefore(container, afterDiv);
+  } else {
+    console.error("Не найдено место вставки для кнопки");
+  }
 }
 
-// MutationObserver для отслеживания изменений DOM
-const observer = new MutationObserver(() => {
-  addButton();
-});
-
-// Начинаем следить за телом документа
+// MutationObserver для SPA: следим за изменением DOM
+const observer = new MutationObserver(addButtonContainer);
 observer.observe(document.body, { childList: true, subtree: true });
 
-// Пытаемся добавить кнопку сразу
-addButton();
+// Попытка вставить сразу
+addButtonContainer();
