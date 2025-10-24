@@ -1,20 +1,24 @@
+console.log("content.js подключен!");
+
 function addButtonContainer() {
   // Проверяем, чтобы контейнер не создавался повторно
   if (document.querySelector("#my-button-container")) return;
 
+// Создаём контейнер
   const container = document.createElement("div");
   container.id = "my-button-container";
   container.style.margin = "10px 0";
   container.style.display = "flex";
   container.style.alignItems = "center";
-  container.style.justifyContent = "flex-end";
+  container.style.justifyContent = "flex-start";
   container.style.gap = "10px";
 
+  // Создаём кнопку
   const btn = document.createElement("button");
   btn.id = "my-autofill-btn";
   btn.innerText = "Вставить даты из буфера";
 
-  // Стили кнопки
+  // Стили для кнопки
   btn.style.padding = "6px 14px";
   btn.style.cursor = "pointer";
   btn.style.backgroundColor = "#FFD700";
@@ -26,6 +30,7 @@ function addButtonContainer() {
   btn.style.color = "#333";
   btn.style.transition = "background-color 0.2s, transform 0.1s";
 
+  // Эффект наведения
   btn.onmouseover = () => btn.style.backgroundColor = "#FFE033";
   btn.onmouseout = () => btn.style.backgroundColor = "#FFD700";
   btn.onmousedown = () => btn.style.transform = "scale(0.97)";

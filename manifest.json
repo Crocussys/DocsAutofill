@@ -7,7 +7,8 @@
   "content_scripts": [
     {
       "matches": ["https://beer.crpt.ru/requests/connect-tap/create"], 
-      "js": ["content.js"]
+      "js": ["content.js"],
+      "all_frames": true
     }
   ]
 }
