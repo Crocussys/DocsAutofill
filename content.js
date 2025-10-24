@@ -26,7 +26,7 @@ function addButtonContainer() {
   // Создаём кнопку
   const btn = document.createElement("button");
   btn.id = "my-autofill-btn";
-  btn.innerText = "Вставить даты из буфера";
+  btn.innerText = "Вставить даты";
 
   btn.style.padding = "6px 14px";
   btn.style.cursor = "pointer";
