@@ -14,16 +14,16 @@ function setReactInputValue(input, value) {
 function addButtonContainer() {
   if (document.querySelector("#my-button-container")) return;
 
+  // Создаём контейнер
   const container = document.createElement("div");
   container.id = "my-button-container";
-  container.style.position = "fixed";
-  container.style.top = "100px";
-  container.style.right = "20px";
-  container.style.zIndex = "9999";
+  container.style.margin = "10px 0";
   container.style.display = "flex";
   container.style.alignItems = "center";
+  container.style.justifyContent = "flex-start";
   container.style.gap = "10px";
 
+  // Создаём кнопку
   const btn = document.createElement("button");
   btn.id = "my-autofill-btn";
   btn.innerText = "Вставить даты из буфера";
@@ -39,6 +39,7 @@ function addButtonContainer() {
   btn.style.color = "#333";
   btn.style.transition = "background-color 0.2s, transform 0.1s";
 
+  // Эффект наведения
   btn.onmouseover = () => btn.style.backgroundColor = "#FFE033";
   btn.onmouseout = () => btn.style.backgroundColor = "#FFD700";
   btn.onmousedown = () => btn.style.transform = "scale(0.97)";
@@ -62,7 +63,7 @@ function addButtonContainer() {
           if (match) {
             setReactInputValue(dateFields[index], match[1]);
           }
-        }, index * 10); // 10ms задержка на каждый input
+        }, index * 2); // 2ms задержка на каждый input
       });
 
     } catch (e) {
