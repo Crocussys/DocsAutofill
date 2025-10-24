@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Date Autofill",
+  "version": "1.0",
+  "description": "Автоматическое заполнение дат из буфера обмена",
+  "permissions": ["clipboardRead"],
+  "content_scripts": [
+    {
+      "matches": ["https://beer.crpt.ru/request/connect-tap/create"], 
+      "js": ["content.js"]
+    }
+  ]
+}
