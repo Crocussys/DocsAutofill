@@ -2,19 +2,37 @@ function addButtonContainer() {
   // Проверяем, чтобы контейнер не создавался повторно
   if (document.querySelector("#my-button-container")) return;
 
-  // Создаём новый div
+  // Создаём контейнер
   const container = document.createElement("div");
   container.id = "my-button-container";
   container.style.margin = "10px 0";
   container.style.display = "flex";
   container.style.alignItems = "center";
+  container.style.justifyContent = "flex-start";
+  container.style.gap = "10px";
 
   // Создаём кнопку
   const btn = document.createElement("button");
   btn.id = "my-autofill-btn";
   btn.innerText = "Вставить даты";
-  btn.style.padding = "6px 12px";
+
+  // Стили для кнопки
+  btn.style.padding = "6px 14px";
   btn.style.cursor = "pointer";
+  btn.style.backgroundColor = "#FFD700";
+  btn.style.border = "1px solid #E6C200";
+  btn.style.borderRadius = "6px";
+  btn.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
+  btn.style.fontSize = "14px";
+  btn.style.fontWeight = "500";
+  btn.style.color = "#333"; 
+  btn.style.transition = "background-color 0.2s, transform 0.1s";
+
+  // Эффект наведения
+  btn.onmouseover = () => btn.style.backgroundColor = "#FFE033";
+  btn.onmouseout = () => btn.style.backgroundColor = "#FFD700";
+  btn.onmousedown = () => btn.style.transform = "scale(0.97)";
+  btn.onmouseup = () => btn.style.transform = "scale(1)";
 
   // Добавляем обработчик кнопки
   btn.onclick = async () => {
@@ -30,8 +48,7 @@ function addButtonContainer() {
 
         const match = line.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
         if (match) {
-          const formatted = match[1] + match[2] + match[3];
-          dateFields[index].value = formatted;
+          dateFields[index].value = match[1];
         }
       });
 
@@ -43,7 +60,7 @@ function addButtonContainer() {
 
   container.appendChild(btn);
 
-  const beforeDiv = document.querySelector("div.MuiTableHead-root.HeaderRow.MuiBox-root.css-1o4pfy6");
+  const beforeDiv = document.querySelector("div.MuiTableHead-root.HeaderRow.MuiBox-root");
   const afterDiv = document.querySelector("div.ReactVirtualized__Grid.ReactVirtualized__List");
 
   if (beforeDiv && afterDiv) {
