@@ -3,12 +3,11 @@
   "name": "Date Autofill",
   "version": "1.0",
   "description": "Автоматическое заполнение дат из буфера обмена",
-  "permissions": ["clipboardRead", "scripting", "tabs"],
-  "host_permissions": ["https://beer.crpt.ru/*"],
-  "background": {
-    "service_worker": "background.js"
-  },
-  "action": {
-    "default_title": "Вставить даты"
-  }
+  "permissions": ["clipboardRead"],
+  "content_scripts": [
+    {
+      "matches": ["https://beer.crpt.ru/requests/connect-tap/create"], 
+      "js": ["content.js"]
+    }
+  ]
 }
