@@ -14,22 +14,27 @@ function setReactInputValue(input, value) {
 function addButtonContainer() {
   if (document.querySelector("#my-button-container")) return;
 
-  const btn = document.createElement("button");
-  btn.id = "paste-dates-btn";
-  btn.textContent = "Вставить даты";
+  const container = document.createElement("div");
+  container.id = "my-button-container";
 
-  Object.assign(btn.style, {
-    marginLeft: "10px",
-    padding: "6px 12px",
-    background: "#1976d2",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    fontSize: "14px",
-    cursor: "pointer"
-  });
+  // Настраиваем позиционирование по координатам (в пикселях)
+  container.style.position = "absolute";
+  container.style.left = "150px"; // координата X
+  container.style.top = "300px";  // координата Y
+  container.style.zIndex = "9999";
 
-  btn.onclick = async () => {
+  // Пример кнопки
+  const button = document.createElement("button");
+  button.textContent = "Вставить даты";
+  button.style.padding = "8px 14px";
+  button.style.borderRadius = "8px";
+  button.style.border = "none";
+  button.style.cursor = "pointer";
+  button.style.background = "#007bff";
+  button.style.color = "white";
+  button.style.fontSize = "14px";
+
+  button.onclick = async () => {
     try {
       const text = await navigator.clipboard.readText();
       if (!text) return alert("Буфер пустой!");
@@ -54,20 +59,8 @@ function addButtonContainer() {
     }
   };
 
-  // Вставляем контейнер
-  const uploadBtn = Array.from(document.querySelectorAll("button"))
-    .find(btn => btn.textContent.trim() === "Загрузить файл");
-
-  if (!uploadBtn) {
-    setTimeout(addPasteButtonNearUpload, 1500);
-    return;
-  }
-
-  const parent = uploadBtn.closest(".MuiStack-root.css-shayf4") || uploadBtn.parentElement;
-
-  if (parent) {
-    parent.appendChild(btn);
-  }
+  container.appendChild(button);
+  document.body.appendChild(container);
 }
 
 // MutationObserver для SPA: следим за динамическими изменениями DOM
