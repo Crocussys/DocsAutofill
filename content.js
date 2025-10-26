@@ -69,20 +69,10 @@ function addButtonContainer() {
   container.appendChild(btn);
 
   // Вставляем контейнер
-  const parentDiv = document
-    .querySelector("#redesign-portal form")
-    ?.querySelector("div")
-    ?.querySelector("div")
-    ?.querySelector("div");
-
+  const parentDiv = document.querySelector("#WindowHeader");
   if (parentDiv) {
-    const secondChild = parentDiv.children[1];
-    if (secondChild) {
-      parentDiv.insertBefore(container, secondChild);
-    } else {
-      parentDiv.appendChild(container);
-    }
-  }
+    parentDiv.appendChild(container);
+  } 
 }
 
 // MutationObserver для SPA: следим за динамическими изменениями DOM
