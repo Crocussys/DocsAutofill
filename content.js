@@ -71,7 +71,11 @@ function addButtonContainer() {
   // Вставляем контейнер
   const parentDiv = document.querySelector("#WindowHeader");
   if (parentDiv) {
-    parentDiv.appendChild(container);
+    const oldBtn = document.querySelector("#my-button-container");
+    if (oldBtn) {
+      oldBtn.remove();
+    }
+    parentDiv.insertAdjacentElement("beforeend", container);
   } 
 }
 
