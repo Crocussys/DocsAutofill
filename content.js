@@ -14,32 +14,20 @@ function setReactInputValue(input, value) {
 function addButtonContainer() {
   if (document.querySelector("#my-button-container")) return;
 
-  const container = document.createElement("div");
-  container.id = "my-button-container";
-  container.style.margin = "10px 0";
-  container.style.display = "flex";
-  container.style.alignItems = "center";
-  container.style.gap = "10px";
-
   const btn = document.createElement("button");
-  btn.id = "my-autofill-btn";
-  btn.innerText = "Вставить даты из буфера";
+  btn.id = "paste-dates-btn";
+  btn.textContent = "Вставить даты";
 
-  btn.style.padding = "6px 14px";
-  btn.style.cursor = "pointer";
-  btn.style.backgroundColor = "#FFD700";
-  btn.style.border = "1px solid #E6C200";
-  btn.style.borderRadius = "6px";
-  btn.style.boxShadow = "0 2px 4px rgba(0,0,0,0.2)";
-  btn.style.fontSize = "14px";
-  btn.style.fontWeight = "500";
-  btn.style.color = "#333";
-  btn.style.transition = "background-color 0.2s, transform 0.1s";
-
-  btn.onmouseover = () => btn.style.backgroundColor = "#FFE033";
-  btn.onmouseout = () => btn.style.backgroundColor = "#FFD700";
-  btn.onmousedown = () => btn.style.transform = "scale(0.97)";
-  btn.onmouseup = () => btn.style.transform = "scale(1)";
+  Object.assign(btn.style, {
+    marginLeft: "10px",
+    padding: "6px 12px",
+    background: "#1976d2",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    fontSize: "14px",
+    cursor: "pointer"
+  });
 
   btn.onclick = async () => {
     try {
@@ -66,17 +54,20 @@ function addButtonContainer() {
     }
   };
 
-  container.appendChild(btn);
-
   // Вставляем контейнер
-  const parentDiv = document.querySelector("#WindowHeader");
-  if (parentDiv) {
-    const oldBtn = document.querySelector("#my-button-container");
-    if (oldBtn) {
-      oldBtn.remove();
-    }
-    parentDiv.insertAdjacentElement("beforeend", container);
-  } 
+  const uploadBtn = Array.from(document.querySelectorAll("button"))
+    .find(btn => btn.textContent.trim() === "Загрузить файл");
+
+  if (!uploadBtn) {
+    setTimeout(addPasteButtonNearUpload, 1500);
+    return;
+  }
+
+  const parent = uploadBtn.closest(".MuiStack-root.css-shayf4") || uploadBtn.parentElement;
+
+  if (parent) {
+    parent.appendChild(btn);
+  }
 }
 
 // MutationObserver для SPA: следим за динамическими изменениями DOM
