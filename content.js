@@ -16,14 +16,11 @@ function addButtonContainer() {
 
   const container = document.createElement("div");
   container.id = "my-button-container";
-
-  // Настраиваем позиционирование по координатам (в пикселях)
   container.style.position = "absolute";
-  container.style.left = "150px"; // координата X
-  container.style.top = "300px";  // координата Y
+  container.style.left = "830px";
+  container.style.top = "327px";
   container.style.zIndex = "9999";
 
-  // Пример кнопки
   const button = document.createElement("button");
   button.textContent = "Вставить даты";
   button.style.padding = "8px 14px";
