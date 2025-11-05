@@ -15,8 +15,9 @@ function data_pars(data) {
     return [codes, dates];
 }
 
-function getDataFromClipboard() {
-    return data_pars(navigator.clipboard.readText());
+async function getDataFromClipboard() {
+    const text = await navigator.clipboard.readText();
+    return data_pars(text);
 }
 
 function setReactInputValue(input, value) {
@@ -43,14 +44,29 @@ function waitForAttribute(element, attributeName, expectedValue) {
     });
 }
 
-function ButtonFunc() {
+function waitForAttributeToDisappear(element, attributeName) {
+    return new Promise(resolve => {
+        if (!element.hasAttribute(attributeName)) {
+            return resolve(element);
+        }
+        const observer3 = new MutationObserver(() => {
+            if (!element.hasAttribute(attributeName)) {
+                observer3.disconnect();
+                resolve(element);
+            }
+        });
+        observer3.observe(element, { attributes: true });
+    });
+}
+
+async function ButtonFunc() {
     const codes_input = document.querySelector('input[id="mui-6"]');
     const add_code_button = codes_input.parentElement.lastChild;
     if (!codes_input || !add_code_button) {
         console.log('Code input not founded');
         return;
     }
-    const [codes, dates] = getDataFromClipboard();
+    const [codes, dates] = await getDataFromClipboard();
     for (let index = 0; index < codes.length; ++index) {
         setReactInputValue(codes_input, codes[index]);
         waitForAttribute(codes_input, 'aria-expanded', true);
@@ -75,9 +91,9 @@ function addButton() {
     }
     const codes_input = document.querySelector('input[id="mui-6"]');
     if (!codes_input) {
-        console.log('Code input not founded');
         return;
     }
+    waitForAttributeToDisappear(codes_input, 'disabled');
     codes_input.parentElement.parentElement.parentElement.parentElement.parentElement.appendChild(getButton());
 }
 
