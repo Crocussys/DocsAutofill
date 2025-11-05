@@ -1,11 +1,11 @@
 console.log('DateAutofill extension enabled');
 
 function data_pars(data) {
-    const lines = data.replace(/^(?:\r?\n)+|(?:\r?\n)+$/g, '').replace(/(\r?\n)+/g, '\n').split('\n');
+    const lines = data.replace(/^(?:\r?\n)+|(?:\r?\n)+$/g, '').split(/\r?\n/);
     let codes = [];
     let dates = [];
-    for (const line in lines) {
-        const elems = line.trim().replace(/ +/g, ' ').split(' ');
+    for (const line of lines) {
+        const elems = line.trim().split(/\s+/);
         if (elems.length < 2) {
             throw "Incorrect data";
         }
@@ -66,11 +66,16 @@ async function ButtonFunc() {
         console.log('Code input not founded');
         return;
     }
-    const [codes, dates] = await getDataFromClipboard();
-    for (let index = 0; index < codes.length; ++index) {
-        setReactInputValue(codes_input, codes[index]);
-        waitForAttribute(codes_input, 'aria-expanded', true);
-        add_code_button.click();
+    try {
+        const [codes, dates] = await getDataFromClipboard();
+        for (let index = 0; index < codes.length; ++index) {
+            setReactInputValue(codes_input, codes[index]);
+            await waitForAttribute(codes_input, 'aria-expanded', true);
+            add_code_button.click();
+        }
+    } catch (e) {
+        console.log(e);
+        return;
     }
 }
 
@@ -85,7 +90,7 @@ function getButton() {
     return button;
 }
 
-function addButton() {
+async function addButton() {
     if (document.querySelector('#autofill-button')) {
         return;
     }
@@ -93,7 +98,7 @@ function addButton() {
     if (!codes_input) {
         return;
     }
-    waitForAttributeToDisappear(codes_input, 'disabled');
+    await waitForAttributeToDisappear(codes_input, 'disabled');
     codes_input.parentElement.parentElement.parentElement.parentElement.parentElement.appendChild(getButton());
 }
 
