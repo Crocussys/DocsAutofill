@@ -4,7 +4,7 @@ function data_pars(data) {
     const lines = data.replace(/^(?:\r?\n)+|(?:\r?\n)+$/g, '').replace(/(\r?\n)+/g, '\n').split('\n');
     let codes = [];
     let dates = [];
-    for (line in lines) {
+    for (const line in lines) {
         const elems = line.trim().replace(/ +/g, ' ').split(' ');
         if (elems.length < 2) {
             throw "Incorrect data";
@@ -12,7 +12,7 @@ function data_pars(data) {
         codes.push(elems[0]);
         dates.push(elems[1]);
     }
-    return codes, dates;
+    return [codes, dates];
 }
 
 function getDataFromClipboard() {
@@ -50,7 +50,7 @@ function ButtonFunc() {
         console.log('Code input not founded');
         return;
     }
-    codes, dates = getDataFromClipboard();
+    const [codes, dates] = getDataFromClipboard();
     for (let index = 0; index < codes.length; ++index) {
         setReactInputValue(codes_input, codes[index]);
         waitForAttribute(codes_input, 'aria-expanded', true);
@@ -64,11 +64,15 @@ function getButton() {
     button.setAttribute('class', 'MuiButtonBase-root MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeLarge MuiButton-textSizeLarge MuiButton-disableElevation MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeLarge MuiButton-textSizeLarge MuiButton-disableElevation css-5pqc4n');
     button.setAttribute('tabindex', 0);
     button.setAttribute('type', 'button');
+    button.setAttribute('id', 'autofill-button');
     button.onclick = ButtonFunc;
     return button;
 }
 
 function addButton() {
+    if (document.querySelector('#autofill-button')) {
+        return;
+    }
     const codes_input = document.querySelector('input[id="mui-6"]');
     if (!codes_input) {
         console.log('Code input not founded');
