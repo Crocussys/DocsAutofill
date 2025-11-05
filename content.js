@@ -91,14 +91,14 @@ function getButton() {
 }
 
 async function addButton() {
-    if (document.querySelector('#autofill-button')) {
-        return;
-    }
     const codes_input = document.querySelector('input[id="mui-6"]');
     if (!codes_input) {
         return;
     }
     await waitForAttributeToDisappear(codes_input, 'disabled');
+    if (document.querySelector('#autofill-button')) {
+        return;
+    }
     codes_input.parentElement.parentElement.parentElement.parentElement.parentElement.appendChild(getButton());
 }
 
