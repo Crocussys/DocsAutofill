@@ -69,9 +69,9 @@ async function ButtonFunc() {
         const [codes, dates] = await getDataFromClipboard();
         for (let index = 0; index < codes.length; ++index) {
             setReactInputValue(codes_input, codes[index]);
-            await waitForAttribute(codes_input, 'aria-expanded', true);
+            await waitForAttribute(codes_input, 'aria-expanded', 'true');
             codes_input.parentElement.lastChild.click();
-            setReactInputValue(document.querySelector('input[name="codes[${index}].connectDate"]'), dates[index]);
+            setReactInputValue(document.querySelector(`input[name="codes[${index}].connectDate"]`), dates[index]);
             codes_input = document.querySelector('div.MuiAutocomplete-root[productgroupids="15"][documenttypecode="231"]').querySelector('input[role="combobox"][aria-autocomplete="list"]');
         }
     } catch (e) {
@@ -92,15 +92,16 @@ function getButton() {
 }
 
 async function addButton() {
-    const codes_input = document.querySelector('div.MuiAutocomplete-root[productgroupids="15"][documenttypecode="231"]').querySelector('input[role="combobox"][aria-autocomplete="list"]');
-    if (!codes_input) {
-        return;
+    const autocompleteRoot = document.querySelector('div.MuiAutocomplete-root[productgroupids="15"][documenttypecode="231"]');
+    if (autocompleteRoot) {
+        const codes_input = autocompleteRoot.querySelector('input[role="combobox"][aria-autocomplete="list"]');
+        if (codes_input) {
+            await waitForAttributeToDisappear(codes_input, 'disabled');
+            if (!document.querySelector('#autofill-button')) {
+                codes_input.parentElement.parentElement.parentElement.parentElement.parentElement.appendChild(getButton());
+            }
+        }
     }
-    await waitForAttributeToDisappear(codes_input, 'disabled');
-    if (document.querySelector('#autofill-button')) {
-        return;
-    }
-    codes_input.parentElement.parentElement.parentElement.parentElement.parentElement.appendChild(getButton());
 }
 
 const observer = new MutationObserver(addButton);
