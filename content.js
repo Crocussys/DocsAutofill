@@ -60,9 +60,8 @@ function waitForAttributeToDisappear(element, attributeName) {
 }
 
 async function ButtonFunc() {
-    const codes_input = document.querySelector('input[id="mui-6"]');
-    const add_code_button = codes_input.parentElement.lastChild;
-    if (!codes_input || !add_code_button) {
+    let codes_input = document.querySelector('div.MuiAutocomplete-root[productgroupids="15"][documenttypecode="231"]').querySelector('input[role="combobox"][aria-autocomplete="list"]');
+    if (!codes_input) {
         console.log('Code input not founded');
         return;
     }
@@ -71,7 +70,9 @@ async function ButtonFunc() {
         for (let index = 0; index < codes.length; ++index) {
             setReactInputValue(codes_input, codes[index]);
             await waitForAttribute(codes_input, 'aria-expanded', true);
-            add_code_button.click();
+            codes_input.parentElement.lastChild.click();
+            setReactInputValue(document.querySelector('input[name="codes[${index}].connectDate"]'), dates[index]);
+            codes_input = document.querySelector('div.MuiAutocomplete-root[productgroupids="15"][documenttypecode="231"]').querySelector('input[role="combobox"][aria-autocomplete="list"]');
         }
     } catch (e) {
         console.log(e);
@@ -91,7 +92,7 @@ function getButton() {
 }
 
 async function addButton() {
-    const codes_input = document.querySelector('input[id="mui-6"]');
+    const codes_input = document.querySelector('div.MuiAutocomplete-root[productgroupids="15"][documenttypecode="231"]').querySelector('input[role="combobox"][aria-autocomplete="list"]');
     if (!codes_input) {
         return;
     }
