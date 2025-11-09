@@ -2,22 +2,28 @@ console.log('DateAutofill extension enabled');
 
 function data_pars(data) {
     const lines = data.replace(/^(?:\r?\n)+|(?:\r?\n)+$/g, '').split(/\r?\n/);
-    let codes = [];
-    let dates = [];
+    let codes = {};
     for (const line of lines) {
         const elems = line.trim().split(/\s+/);
-        if (elems.length < 2) {
-            throw "Incorrect data";
+        if (elems.length < 2 || !/^(\d{2})\.(\d{2})\.(\d{4})$/.test(elems[1])) {
+            continue;
         }
-        codes.push(elems[0]);
-        dates.push(elems[1]);
+        codes[elems[0]] = elems[1];
     }
-    return [codes, dates];
+    return codes;
 }
 
 async function getDataFromClipboard() {
     const text = await navigator.clipboard.readText();
     return data_pars(text);
+}
+
+function createFile(codes) {
+    const worksheet = XLSX.utils.aoa_to_sheet(codes.map(item => [item]));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+    const blob = new Blob([XLSX.write(workbook, { bookType: "xlsx", type: "array" })], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    return new File([blob], "codes.xlsx", { type: blob.type });
 }
 
 function setReactInputValue(input, value) {
@@ -29,77 +35,92 @@ function setReactInputValue(input, value) {
     );
 }
 
-function waitForAttribute(element, attributeName, expectedValue) {
-    return new Promise(resolve => {
-        if (element.getAttribute(attributeName) === expectedValue) {
-            return resolve(element);
-        }
-        const observer2 = new MutationObserver(() => {
-            if (element.getAttribute(attributeName) === expectedValue) {
-                observer2.disconnect();
-                resolve(element);
-            }
-        });
-        observer2.observe(element, { attributes: true });
-    });
+async function waitForButton(container, text, timeout = 5000) {
+    const start = Date.now();
+    while (Date.now() - start < timeout) {
+        const btn = Array.from(container.getElementsByTagName('button')).find(b => b.textContent.includes(text));
+        if (btn) return btn;
+        await new Promise(r => setTimeout(r, 100));
+    }
+    return null;
 }
 
-function waitForAttributeToDisappear(element, attributeName) {
-    return new Promise(resolve => {
-        if (!element.hasAttribute(attributeName)) {
-            return resolve(element);
-        }
-        const observer3 = new MutationObserver(() => {
-            if (!element.hasAttribute(attributeName)) {
-                observer3.disconnect();
-                resolve(element);
-            }
-        });
-        observer3.observe(element, { attributes: true });
-    });
+async function AddDates() {
+    const data = await getDataFromClipboard();
+    const codes = Object.keys(data);
+    for (let index = 0; index < codes.length; ++index) {
+        const code = codes[index];
+        const matchingDiv = Array.from(document.querySelectorAll('div')).find(div => div.textContent.includes(code));
+        const line = matchingDiv.parentElement.parentElement.parentElement;
+        let data_index = line.getAttribute('data-index');
+        setReactInputValue(line.querySelector(`input[name="codes[${data_index}].connectDate"]`), data[code]);
+    }
 }
 
-async function ButtonFunc() {
-    let codes_input = document.querySelector('div.MuiAutocomplete-root[productgroupids="15"][documenttypecode="231"]').querySelector('input[role="combobox"][aria-autocomplete="list"]');
-    if (!codes_input) {
-        console.log('Code input not founded');
-        return;
+async function AddCodes() {
+    const load_file_button = Array.from(this.parentElement.getElementsByTagName('button')).find(btn => btn.textContent.includes('Загрузить файл'));
+    if (!load_file_button) {
+        return
     }
-    try {
-        const [codes, dates] = await getDataFromClipboard();
-        for (let index = 0; index < codes.length; ++index) {
-            setReactInputValue(codes_input, codes[index]);
-            await waitForAttribute(codes_input, 'aria-expanded', 'true');
-            codes_input.parentElement.lastChild.click();
-            setReactInputValue(document.querySelector(`input[name="codes[${index}].connectDate"]`), dates[index]);
-            codes_input = document.querySelector('div.MuiAutocomplete-root[productgroupids="15"][documenttypecode="231"]').querySelector('input[role="combobox"][aria-autocomplete="list"]');
-        }
-    } catch (e) {
-        console.log(e);
-        return;
+    load_file_button.click();
+    const codes = await getDataFromClipboard();
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(createFile(Object.keys(codes)));
+    const input = document.querySelector('input[type="file"]');
+    input.files = dataTransfer.files;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    const footer = document.getElementsByClassName('CisDialog-Footer')[0];
+    const load_button = await waitForButton(footer, 'Загрузить');
+    if (!load_button) {
+        return
     }
+    load_button.click();
+    const add_button = await waitForButton(footer, 'Добавить');
+    if (!add_button) {
+        return
+    }
+    add_button.click();
+    this.textContent = "Вставить даты";
+    this.onclick = AddDates;
 }
 
 function getButton() {
     const button = document.createElement("button");
     button.textContent = "Вставить коды";
-    button.setAttribute('class', 'MuiButtonBase-root MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeLarge MuiButton-textSizeLarge MuiButton-disableElevation MuiButton-root MuiButton-text MuiButton-textPrimary MuiButton-sizeLarge MuiButton-textSizeLarge MuiButton-disableElevation css-5pqc4n');
     button.setAttribute('tabindex', 0);
     button.setAttribute('type', 'button');
     button.setAttribute('id', 'autofill-button');
-    button.onclick = ButtonFunc;
+    button.onclick = AddCodes;
     return button;
 }
 
 async function addButton() {
     const autocompleteRoot = document.querySelector('div.MuiAutocomplete-root[productgroupids="15"][documenttypecode="231"]');
-    if (autocompleteRoot) {
-        const codes_input = autocompleteRoot.querySelector('input[role="combobox"][aria-autocomplete="list"]');
-        if (codes_input) {
-            await waitForAttributeToDisappear(codes_input, 'disabled');
-            if (!document.querySelector('#autofill-button')) {
-                codes_input.parentElement.parentElement.parentElement.parentElement.parentElement.appendChild(getButton());
+    if (autocompleteRoot && !document.querySelector('#autofill-button')) {
+        const codes_list_input_container = autocompleteRoot.parentElement.parentElement;
+        let other_button = codes_list_input_container.getElementsByTagName('button')[0];
+        if (other_button) {
+            const new_button = getButton();
+            codes_list_input_container.appendChild(new_button);
+
+            function syncClass() {
+                new_button.className = other_button.className;
             }
+
+            syncClass();
+            let observerButton = new MutationObserver(() => syncClass());
+            observerButton.observe(other_button, { attributes: true, attributeFilter: ['class'] });
+            const observerContainer = new MutationObserver(() => {
+                const new_other = container.getElementsByTagName('button')[0];
+                if (new_other && new_other !== other_button) {
+                    other_button = new_other;
+                    syncClass();
+                    observerButton.disconnect();
+                    observerButton = new MutationObserver(() => syncClass());
+                    observerButton.observe(other_button, { attributes: true, attributeFilter: ['class'] });
+                }
+            });
+            observerContainer.observe(container, { childList: true, subtree: true });
         }
     }
 }

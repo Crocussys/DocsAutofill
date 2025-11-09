@@ -1,13 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Date Autofill",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Автоматическое заполнение дат из буфера обмена",
   "permissions": ["clipboardRead"],
   "content_scripts": [
     {
       "matches": ["https://beer.crpt.ru/requests/connect-tap/create*"], 
-      "js": ["content.js"],
+      "js": [
+        "libs/xlsx.full.min.js",
+        "content.js"
+      ],
       "all_frames": true,
       "run_at": "document_idle"
     }
