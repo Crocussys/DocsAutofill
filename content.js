@@ -5,7 +5,7 @@ function data_pars(data) {
     let codes = {};
     for (const line of lines) {
         const elems = line.trim().split(/\s+/);
-        if (elems.length < 2 || !/^(\d{2})\.(\d{2})\.(\d{4})$/.test(elems[1])) {
+        if (!elems[0] || !/^(\d{2})\.(\d{2})\.(\d{4})$/.test(elems[1])) {
             continue;
         }
         codes[elems[0]] = elems[1];
@@ -15,7 +15,7 @@ function data_pars(data) {
 
 async function getDataFromClipboard() {
     const text = await navigator.clipboard.readText();
-    return data_pars(text);
+    return text ? data_pars(text) : {};
 }
 
 function createFile(codes) {
@@ -27,8 +27,11 @@ function createFile(codes) {
 }
 
 function setReactInputValue(input, value) {
-    const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-    nativeInputValueSetter.call(input, value);
+    if (!input) {
+        return;
+    }
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(input, value);
 
     ['input', 'change', 'blur'].forEach(evt =>
         input.dispatchEvent(new Event(evt, { bubbles: true }))
@@ -51,7 +54,13 @@ async function AddDates() {
     for (let index = 0; index < codes.length; ++index) {
         const code = codes[index];
         const matchingDiv = Array.from(document.querySelectorAll('div')).find(div => div.textContent.includes(code));
-        const line = matchingDiv.parentElement.parentElement.parentElement;
+        if (!matchingDiv) {
+            continue;
+        }
+        const line = matchingDiv.closest('[data-index]');
+        if (!line) {
+            continue;
+        }
         let data_index = line.getAttribute('data-index');
         setReactInputValue(line.querySelector(`input[name="codes[${data_index}].connectDate"]`), data[code]);
     }
@@ -80,33 +89,38 @@ async function AddCodes() {
         return
     }
     add_button.click();
-    this.textContent = "Вставить даты";
-    this.onclick = AddDates;
 }
 
-function getButton() {
+function getAddCodesButton() {
     const button = document.createElement("button");
     button.textContent = "Вставить коды";
     button.setAttribute('tabindex', 0);
     button.setAttribute('type', 'button');
-    button.setAttribute('id', 'autofill-button');
-    button.onclick = function () {
-        AddCodes.call(this);
-    };
+    button.setAttribute('id', 'add-button');
+    button.onclick = AddCodes;
     return button;
 }
 
-async function addButton() {
+function getFillDatesButton() {
+    const button = document.createElement("button");
+    button.textContent = "Вставить даты";
+    button.setAttribute('tabindex', 0);
+    button.setAttribute('type', 'button');
+    button.setAttribute('id', 'fill-button');
+    button.onclick = AddDates;
+    return button;
+}
+
+async function addButton(btn) {
     const autocompleteRoot = document.querySelector('div.MuiAutocomplete-root[productgroupids="15"][documenttypecode="231"]');
-    if (autocompleteRoot && !document.querySelector('#autofill-button')) {
+    if (autocompleteRoot && !document.getElementById(btn.getAttribute('id'))) {
         const codes_list_input_container = autocompleteRoot.parentElement.parentElement;
         let other_button = codes_list_input_container.getElementsByTagName('button')[0];
         if (other_button) {
-            const new_button = getButton();
-            codes_list_input_container.appendChild(new_button);
+            codes_list_input_container.appendChild(btn);
 
             function syncClass() {
-                new_button.className = other_button.className;
+                btn.className = other_button.className;
             }
 
             syncClass();
@@ -123,11 +137,19 @@ async function addButton() {
                 }
             });
             observerContainer.observe(codes_list_input_container, { childList: true, subtree: true });
+            return;
         }
     }
 }
 
-const observer = new MutationObserver(addButton);
+async function init() {
+    addButton(getAddCodesButton());
+    if (document.querySelector('#redesign-portal')) {
+        addButton(getFillDatesButton());
+    }
+}
+
+const observer = new MutationObserver(init);
 observer.observe(document.body, { childList: true, subtree: true });
 
-addButton();
+init();
