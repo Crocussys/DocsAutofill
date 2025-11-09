@@ -47,20 +47,17 @@ async function waitForButton(container, text, timeout = 5000) {
 async function AddDates() {
     const data = await getDataFromClipboard();
     const codes = Object.keys(data);
+    const rows = Array.from(document.querySelectorAll('div.DataRow'));
 
     for (let code of codes) {
-        const matchingDiv = Array.from(document.querySelectorAll('div')).find(div => div.textContent.includes(code));
-        if (!matchingDiv) {
-            console.log("!matchingDiv");
-            continue;
+        for (let row of rows) {
+            const codeCell = row.querySelector('div.DataCell-Content div.MuiBox-root');
+            if (codeCell && codeCell.textContent === code) {
+                const data_index = row.getAttribute('data-index');
+                setReactInputValue(row.querySelector(`input[name="codes[${data_index}].connectDate"]`), data[code]);
+                break;
+            }
         }
-        const line = matchingDiv.closest('[data-index]');
-        if (!line) {
-            console.log("!line");
-            continue;
-        }
-        const data_index = line.getAttribute('data-index');
-        setReactInputValue(line.querySelector(`input[name="codes[${data_index}].connectDate"]`), data[code]);
     }
 }
 
