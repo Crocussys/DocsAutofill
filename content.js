@@ -45,15 +45,20 @@ async function waitForButton(container, text, timeout = 5000) {
 }
 
 async function AddDates() {
-    console.log('AddDates called');
     const data = await getDataFromClipboard();
     const codes = Object.keys(data);
 
     for (let code of codes) {
         const matchingDiv = Array.from(document.querySelectorAll('div')).find(div => div.textContent.includes(code));
-        if (!matchingDiv) continue;
+        if (!matchingDiv) {
+            console.log("!matchingDiv");
+            continue;
+        }
         const line = matchingDiv.closest('[data-index]');
-        if (!line) continue;
+        if (!line) {
+            console.log("!line");
+            continue;
+        }
         const data_index = line.getAttribute('data-index');
         setReactInputValue(line.querySelector(`input[name="codes[${data_index}].connectDate"]`), data[code]);
     }
@@ -132,21 +137,18 @@ function addButton(btn) {
 }
 
 const observer = new MutationObserver(() => {
-    if (document.querySelector('div.MuiAutocomplete-root[productgroupids="15"][documenttypecode="231"]') &&
-        !document.getElementById('add-button')) {
+    if (!document.getElementById('add-button')) {
         addButton(getAddCodesButton());
     }
 
-    if (document.querySelector('#redesign-portal') && !document.getElementById('fill-button')) {
+    if (document.querySelector('div[role="rowgroup"]') && !document.getElementById('fill-button')) {
         addButton(getFillDatesButton());
     }
 });
 
 observer.observe(document.body, { childList: true, subtree: true });
 
-if (document.querySelector('div.MuiAutocomplete-root[productgroupids="15"][documenttypecode="231"]')) {
-    addButton(getAddCodesButton());
-}
-if (document.querySelector('#redesign-portal')) {
+addButton(getAddCodesButton());
+if (document.querySelector('div[role="rowgroup"]')) {
     addButton(getFillDatesButton());
 }
