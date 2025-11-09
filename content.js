@@ -19,10 +19,10 @@ async function getDataFromClipboard() {
 }
 
 function createFile(codes) {
-    const worksheet = XLSX.utils.aoa_to_sheet(codes.map(item => [item]));
     const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet(codes.map(item => [item]));
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
-    const blob = new Blob([XLSX.write(workbook, { bookType: "xlsx", type: "array" })], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const blob = new Blob([XLSX.write(workbook, { bookType: "xlsx", type: "array", bookSST: true })], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     return new File([blob], "codes.xlsx", { type: blob.type });
 }
 
@@ -90,7 +90,9 @@ function getButton() {
     button.setAttribute('tabindex', 0);
     button.setAttribute('type', 'button');
     button.setAttribute('id', 'autofill-button');
-    button.onclick = AddCodes;
+    button.onclick = function () {
+        AddCodes.call(this);
+    };
     return button;
 }
 
@@ -111,7 +113,7 @@ async function addButton() {
             let observerButton = new MutationObserver(() => syncClass());
             observerButton.observe(other_button, { attributes: true, attributeFilter: ['class'] });
             const observerContainer = new MutationObserver(() => {
-                const new_other = container.getElementsByTagName('button')[0];
+                const new_other = codes_list_input_container.getElementsByTagName('button')[0];
                 if (new_other && new_other !== other_button) {
                     other_button = new_other;
                     syncClass();
@@ -120,7 +122,7 @@ async function addButton() {
                     observerButton.observe(other_button, { attributes: true, attributeFilter: ['class'] });
                 }
             });
-            observerContainer.observe(container, { childList: true, subtree: true });
+            observerContainer.observe(codes_list_input_container, { childList: true, subtree: true });
         }
     }
 }
