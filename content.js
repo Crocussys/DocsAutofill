@@ -48,16 +48,20 @@ async function AddDates() {
     const data = await getDataFromClipboard();
     const codes = Object.keys(data);
     const rows = Array.from(document.querySelectorAll('div.DataRow'));
-
-    for (let code of codes) {
-        for (let row of rows) {
-            const codeCell = row.querySelector('div.DataCell-Content div.MuiBox-root');
-            if (codeCell && codeCell.textContent === code) {
-                const data_index = row.getAttribute('data-index');
-                setReactInputValue(row.querySelector(`input[name="codes[${data_index}].connectDate"]`), data[code]);
-                break;
-            }
+    const map = new Map();
+    for (const row of rows) {
+        const codeCell = row.querySelector('div.DataCell-Content div.MuiBox-root');
+        if (!codeCell) continue;
+        const data_index = row.dataset.index;
+        const input = row.querySelector(`input[name="codes[${data_index}].connectDate"]`);
+        if (input) {
+            map.set(codeCell.textContent, input);
         }
+    }
+    for (const code of codes) {
+        const input = map.get(code);
+        if (!input) continue;
+        setReactInputValue(input, data[code]);
     }
 }
 
