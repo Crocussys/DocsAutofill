@@ -52,14 +52,12 @@ async function AddDates() {
     for (const row of rows) {
         const codeCell = row.querySelector('div.DataCell-Content div.MuiBox-root');
         if (!codeCell) continue;
-        const data_index = row.dataset.index;
-        const input = row.querySelector(`input[name="codes[${data_index}].connectDate"]`);
-        if (input) {
-            map.set(codeCell.textContent, input);
-        }
+        map.set(codeCell.textContent, row.dataset.index);
     }
     for (const code of codes) {
-        const input = map.get(code);
+        const data_index = map.get(code);
+        if (!data_index) continue;
+        const input = document.querySelector(`input[name="codes[${data_index}].connectDate"]`);
         if (!input) continue;
         setReactInputValue(input, data[code]);
     }
