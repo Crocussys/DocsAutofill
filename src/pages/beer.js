@@ -1,5 +1,3 @@
-console.log('DateAutofill extension enabled');
-
 function data_pars(data) {
     const lines = data.replace(/^(?:\r?\n)+|(?:\r?\n)+$/g, '').split(/\r?\n/);
     let codes = {};
@@ -88,7 +86,7 @@ async function AddCodes() {
 function getAddCodesButton() {
     const btn = document.createElement("button");
     btn.textContent = "Вставить коды";
-    btn.setAttribute('tabindex', 0);
+    btn.setAttribute('tabindex', "0");
     btn.setAttribute('type', 'button');
     btn.setAttribute('id', 'add-button');
     btn.onclick = AddCodes;
@@ -98,7 +96,7 @@ function getAddCodesButton() {
 function getFillDatesButton() {
     const btn = document.createElement("button");
     btn.textContent = "Вставить даты";
-    btn.setAttribute('tabindex', 0);
+    btn.setAttribute('tabindex', "0");
     btn.setAttribute('type', 'button');
     btn.setAttribute('id', 'fill-button');
     btn.onclick = AddDates;
