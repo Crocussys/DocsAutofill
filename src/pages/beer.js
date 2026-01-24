@@ -1,4 +1,4 @@
-function data_pars(data) {
+function dataPars(data) {
     const lines = data.replace(/^(?:\r?\n)+|(?:\r?\n)+$/g, '').split(/\r?\n/);
     let codes = {};
     for (const line of lines) {
@@ -11,7 +11,7 @@ function data_pars(data) {
 
 async function getDataFromClipboard() {
     const text = await navigator.clipboard.readText();
-    return text ? data_pars(text) : {};
+    return text ? dataPars(text) : {};
 }
 
 function createFile(codes) {
@@ -20,15 +20,6 @@ function createFile(codes) {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
     const blob = new Blob([XLSX.write(workbook, { bookType: "xlsx", type: "array", bookSST: true })], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
     return new File([blob], "codes.xlsx", { type: blob.type });
-}
-
-function setReactInputValue(input, value) {
-    if (!input) return;
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-    setter.call(input, value);
-    ['input', 'change', 'blur'].forEach(evt =>
-        input.dispatchEvent(new Event(evt, { bubbles: true }))
-    );
 }
 
 async function waitForButton(container, text, timeout = 5000) {
@@ -42,7 +33,7 @@ async function waitForButton(container, text, timeout = 5000) {
     return null;
 }
 
-async function AddDates() {
+async function addDates() {
     const data = await getDataFromClipboard();
     const codes = Object.keys(data);
     const rows = Array.from(document.querySelectorAll('div.DataRow'));
@@ -61,7 +52,7 @@ async function AddDates() {
     }
 }
 
-async function AddCodes() {
+async function addCodes() {
     const load_file_button = Array.from(this.parentElement.getElementsByTagName('button')).find(btn => btn.textContent.includes('Загрузить файл'));
     if (!load_file_button) return;
 
@@ -89,7 +80,7 @@ function getAddCodesButton() {
     btn.setAttribute('tabindex', "0");
     btn.setAttribute('type', 'button');
     btn.setAttribute('id', 'add-button');
-    btn.onclick = AddCodes;
+    btn.onclick = addCodes;
     return btn;
 }
 
@@ -99,7 +90,7 @@ function getFillDatesButton() {
     btn.setAttribute('tabindex', "0");
     btn.setAttribute('type', 'button');
     btn.setAttribute('id', 'fill-button');
-    btn.onclick = AddDates;
+    btn.onclick = addDates;
     return btn;
 }
 
@@ -133,19 +124,27 @@ function addButton(btn) {
     observerContainer.observe(container, { childList: true, subtree: true });
 }
 
-const observer = new MutationObserver(() => {
-    if (!document.getElementById('add-button')) {
-        addButton(getAddCodesButton());
-    }
+function init() {
+    const observer = new MutationObserver(() => {
+        if (!document.getElementById('add-button')) {
+            addButton(getAddCodesButton());
+        }
 
-    if (document.querySelector('div[role="rowgroup"]') && !document.getElementById('fill-button')) {
+        if (document.querySelector('div[role="rowgroup"]') && !document.getElementById('fill-button')) {
+            addButton(getFillDatesButton());
+        }
+    });
+
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    addButton(getAddCodesButton());
+    if (document.querySelector('div[role="rowgroup"]')) {
         addButton(getFillDatesButton());
     }
-});
+}
 
-observer.observe(document.body, { childList: true, subtree: true });
-
-addButton(getAddCodesButton());
-if (document.querySelector('div[role="rowgroup"]')) {
-    addButton(getFillDatesButton());
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
 }

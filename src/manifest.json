@@ -12,18 +12,20 @@
       "js": [
         "utils/init_message.js",
         "libs/xlsx.full.min.js",
-        "extension/beer.js"
+        "utils/all.js",
+        "pages/beer.js"
       ],
       "all_frames": true,
       "run_at": "document_idle"
     },
     {
       "matches": [
-        "https://foo*"
+        "https://milk.crpt.ru/*"
       ],
       "js": [
         "utils/init_message.js",
-        "extension/cheese.js"
+        "utils/all.js",
+        "pages/cheese.js"
       ],
       "all_frames": true,
       "run_at": "document_idle"
