@@ -67,11 +67,23 @@ async function pasteCheeseGTIN() {
 
 function init() {
     if (window.location.pathname === '/warehouse') {
+        const BUTTON_ID = 'docsautofill-copy-cheese';
         const observer = new MutationObserver(() => {
-            const container = document.querySelector('#redesign-portal div.MuiBox-root');
-            if (container) {
-                container.appendChild(createButton(copyCheeseGTIN, 'Копировать сыры', { width: '180px', height: '36px' }));
-                observer.disconnect();
+            const portal = document.querySelector('#redesign-portal');
+            if (!portal) {
+                return;
+            }
+            const boxes = Array.from(portal.querySelectorAll(':scope > div.MuiBox-root'));
+            if (portal.querySelector(`#${BUTTON_ID}`)) {
+                return;
+            }
+            const button = createButton(copyCheeseGTIN, 'Копировать сыры', { width: '180px', height: '36px' });
+            button.id = BUTTON_ID;
+            button.style.marginLeft = '8px';
+            if (boxes.length === 0) {
+                portal.appendChild(button);
+            } else {
+                boxes[0].insertAdjacentElement('afterend', button);
             }
         });
         observer.observe(document.body, {
