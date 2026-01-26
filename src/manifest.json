@@ -12,7 +12,7 @@
       "js": [
         "utils/init_message.js",
         "libs/xlsx.full.min.js",
-        "utils/all.js",
+        "utils/react.js",
         "pages/beer.js"
       ],
       "all_frames": true,
@@ -24,7 +24,8 @@
       ],
       "js": [
         "utils/init_message.js",
-        "utils/all.js",
+        "utils/react.js",
+        "utils/buttons.js",
         "pages/cheese.js"
       ],
       "all_frames": true,
