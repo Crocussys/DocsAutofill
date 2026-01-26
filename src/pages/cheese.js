@@ -66,50 +66,58 @@ async function pasteCheeseGTIN() {
 
 
 function init() {
-    if (window.location.pathname === '/warehouse') {
-        const BUTTON_ID = 'docsautofill-copy-cheese';
-        const observer = new MutationObserver(() => {
-            const portal = document.querySelector('#redesign-portal');
-            if (!portal) {
-                return;
-            }
-            const boxes = Array.from(portal.querySelectorAll(':scope > div.MuiBox-root'));
-            if (portal.querySelector(`#${BUTTON_ID}`)) {
-                return;
-            }
-            const button = createButton(copyCheeseGTIN, 'Копировать сыры', { width: '180px', height: '36px' });
-            button.id = BUTTON_ID;
-            button.style.marginLeft = '8px';
-            if (boxes.length === 0) {
-                portal.appendChild(button);
-            } else {
-                boxes[0].insertAdjacentElement('afterend', button);
-            }
-        });
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-    } else if (window.location.pathname === '/requests/withdrawing/create') {
-        const BUTTON_ID = 'custom-header-button';
-        const observer = new MutationObserver(() => {
-            const container = document.querySelector('#WindowHeader div.FormLayout-FormHeaderSection');
-            if (!container) {
-                return;
-            }
-            if (container.querySelector(`#${BUTTON_ID}`)) {
-                return;
-            }
-            const button = createButton(pasteCheeseGTIN, 'Вставить сыры', { width: '130px', height: '36px' });
-            button.id = BUTTON_ID;
-            button.style.marginLeft = '8px';
+    const BUTTONS = {
+        '/warehouse': {
+            id: 'docsautofill-copy-cheese',
+            text: 'Копировать сыры',
+            onClick: copyCheeseGTIN,
+            size: { width: '130px', height: '50px' },
+            getContainer: () => {
+                const portal = document.querySelector('#redesign-portal');
+                if (!portal) {
+                    return null;
+                }
+                const boxes = Array.from(portal.querySelectorAll(':scope > div.MuiBox-root'));
+                return boxes.length === 0 ? portal : boxes[0];
+            },
+            insertAfter: true
+        },
+        '/requests/withdrawing/create': {
+            id: 'custom-header-button',
+            text: 'Вставить сыры',
+            onClick: pasteCheeseGTIN,
+            size: { width: '130px', height: '50px' },
+            getContainer: () => document.querySelector('#WindowHeader div.FormLayout-FormHeaderSection'),
+            insertAfter: false
+        }
+    };
+    const observer = new MutationObserver(() => {
+        const path = window.location.pathname;
+        const config = BUTTONS[path];
+        if (!config) {
+            return;
+        }
+        const container = config.getContainer();
+        if (!container) {
+            return;
+        }
+        if (container.querySelector(`#${config.id}`)) {
+            return;
+        }
+        const button = createButton(config.onClick, config.text, config.size);
+        button.id = config.id;
+        button.style.marginLeft = '8px';
+        if (config.insertAfter) {
+            container.insertAdjacentElement('afterend', button);
+        } else {
             container.appendChild(button);
-        });
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-    }
+        }
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
 }
 
 if (document.readyState === 'loading') {
