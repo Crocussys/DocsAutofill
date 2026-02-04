@@ -3,14 +3,28 @@ async function getDataFromClipboard() {
     return text ? JSON.parse(text) : {};
 }
 
-function copyCheeseGTIN() {
+function showStatusMessage(buttonId, durationMs = 5000) {
+    const status = document.getElementById(`${buttonId}-status`);
+    if (!status) {
+        return;
+    }
+    status.style.opacity = '1';
+    if (status._hideTimer) {
+        clearTimeout(status._hideTimer);
+    }
+    status._hideTimer = setTimeout(() => {
+        status.style.opacity = '0';
+    }, durationMs);
+}
+
+async function copyCheeseGTIN(statusButtonId) {
     let rows = document.querySelectorAll('div[data-test="product.row"]');
     if (!rows || rows.length === 0) {
         rows = document.querySelectorAll('#redesign-portal .DataRow');
     }
     if (!rows || rows.length === 0) {
         console.warn('[DocsAutofill] GTIN rows not found for copy.');
-        return;
+        return false;
     }
     const gtins = {};
     rows.forEach(row => {
@@ -18,19 +32,28 @@ function copyCheeseGTIN() {
             gtins[row.querySelector('[data-column="gtin"] a')?.innerText] = Number(row.querySelector('[data-column="quantity"]')?.innerText.replace(',', '.').match(/\d+(\.\d+)?/)?.[0])
         }
     });
-    navigator.clipboard.writeText(JSON.stringify(gtins));
+    try {
+        await navigator.clipboard.writeText(JSON.stringify(gtins));
+        if (statusButtonId) {
+            showStatusMessage(statusButtonId);
+        }
+        return true;
+    } catch (error) {
+        console.warn('[DocsAutofill] Failed to copy GTINs.', error);
+        return false;
+    }
 }
 
 async function pasteCheeseGTIN() {
     const date = new Date();
     const today = `${String(date.getDate()).padStart(2,'0')}.${String(date.getMonth()+1).padStart(2,'0')}.${date.getFullYear()}`;
-    selectMuiOption('mui-5', '219');
-    selectMuiOption('mui-15', 'OTHER');
-    setReactInputValue(document.getElementById('mui-16'), today);
-    setReactInputValue(document.getElementById('mui-21'), 'фасовка');
-    setReactInputValue(document.getElementById('mui-24'), '1');
-    setReactInputValue(document.getElementById('mui-25'), today);
-    setReactInputValue(document.getElementById('mui-26'), 'УПД');
+    selectMuiOptionByName('documentType', '219');
+    selectMuiOptionByName('action', 'OTHER');
+    setReactInputValue(document.querySelector('input[name="actionDate"]'), today);
+    setReactInputValue(document.querySelector('input[name="actionOther"]'), 'фасовка');
+    setReactInputValue(document.querySelector('input[name="sourceDocumentNumber"]'), '1');
+    setReactInputValue(document.querySelector('input[name="sourceDocumentDate"]'), today);
+    setReactInputValue(document.querySelector('input[name="sourceDocumentName"]'), 'УПД');
     const data = await getDataFromClipboard();
     if (!data || Object.keys(data).length === 0) {
         return;
@@ -76,15 +99,13 @@ function init() {
         '/warehouse': {
             id: 'docsautofill-copy-cheese',
             text: 'Копировать сыры',
-            onClick: copyCheeseGTIN,
+            onClick: () => copyCheeseGTIN('docsautofill-copy-cheese'),
             size: { width: '150px', height: '40px' },
+            statusText: 'Скопировано!',
+            marginLeft: '24px',
+            marginTop: '24px',
             getContainer: () => {
-                const portal = document.querySelector('#redesign-portal');
-                if (!portal) {
-                    return null;
-                }
-                const boxes = Array.from(portal.querySelectorAll(':scope > div.MuiBox-root'));
-                return boxes.length === 0 ? portal : boxes[0];
+                return document.querySelector('#redesign-portal');
             },
             insertAfter: true
         },
@@ -92,31 +113,37 @@ function init() {
             id: 'custom-header-button',
             text: 'Вставить сыры',
             onClick: pasteCheeseGTIN,
-            size: { width: '130px', height: '50px' },
-            getContainer: () => document.querySelector('#WindowHeader div.FormLayout-FormHeaderSection'),
+            size: { width: '150px', height: '40px' },
+            marginLeft: '24px',
+            marginTop: '0px',
+            getContainer: () => {
+                const header = Array.from(document.querySelectorAll('#redesign-portal .FormLayout-FormHeaderSection'))
+                    .find(el => el.textContent?.includes('Вывод из оборота'));
+                return header || document.querySelector('#WindowHeader div.FormLayout-FormHeaderSection');
+            },
             insertAfter: false
         }
     };
-    const placeButton = (container, button, insertAfter) => {
+    const placeButton = (container, element, insertAfter) => {
         if (!insertAfter) {
-            if (button.parentElement !== container) {
-                container.appendChild(button);
+            if (element.parentElement !== container) {
+                container.appendChild(element);
             }
             return;
         }
         const children = Array.from(container.children);
         if (children.length === 0) {
-            if (button.parentElement !== container) {
-                container.appendChild(button);
+            if (element.parentElement !== container) {
+                container.appendChild(element);
             }
             return;
         }
-        const firstNonButton = children.find(child => child !== button);
-        if (!firstNonButton) {
+        const firstNonElement = children.find(child => child !== element);
+        if (!firstNonElement) {
             return;
         }
-        if (firstNonButton.nextElementSibling !== button) {
-            firstNonButton.insertAdjacentElement('afterend', button);
+        if (firstNonElement.nextElementSibling !== element) {
+            firstNonElement.insertAdjacentElement('afterend', element);
         }
     };
 
@@ -130,14 +157,44 @@ function init() {
         if (!container) {
             return;
         }
+        const wrapperId = `${config.id}-wrapper`;
+        let wrapper = document.getElementById(wrapperId);
+        if (!wrapper) {
+            wrapper = document.createElement('div');
+            wrapper.id = wrapperId;
+            wrapper.style.display = 'inline-flex';
+            wrapper.style.alignItems = 'center';
+            wrapper.style.gap = '8px';
+        }
         let button = document.getElementById(config.id);
         if (!button) {
             button = createButton(config.onClick, config.text, config.size);
             button.id = config.id;
         }
-        button.style.marginLeft = '24px';
-        button.style.marginTop = '24px';
-        placeButton(container, button, config.insertAfter);
+        if (button.parentElement !== wrapper) {
+            wrapper.appendChild(button);
+        }
+        if (config.statusText) {
+            const statusId = `${config.id}-status`;
+            let status = document.getElementById(statusId);
+            if (!status) {
+                status = document.createElement('span');
+                status.id = statusId;
+                status.textContent = config.statusText;
+                status.style.opacity = '0';
+                status.style.transition = 'opacity 0.3s ease';
+                status.style.color = '#2e7d32';
+                status.style.fontSize = '14px';
+                status.style.pointerEvents = 'none';
+                status.style.userSelect = 'none';
+            }
+            if (status.parentElement !== wrapper) {
+                wrapper.appendChild(status);
+            }
+        }
+        wrapper.style.marginLeft = config.marginLeft ?? '24px';
+        wrapper.style.marginTop = config.marginTop ?? '24px';
+        placeButton(container, wrapper, config.insertAfter);
     });
 
     observer.observe(document.body, {

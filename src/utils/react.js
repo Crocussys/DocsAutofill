@@ -7,16 +7,24 @@ function setReactInputValue(input, value) {
     );
 }
 
-function selectMuiOption(selectId, value) {
+function selectMuiOptionByName(inputName, value) {
     const maxAttempts = 40;
     let attempts = 0;
 
+    const findSelect = () => {
+        const input = document.querySelector(`input[name="${inputName}"]`);
+        if (!input) return null;
+        return input.closest('.MuiFormControl-root')?.querySelector('[role="combobox"]') ??
+            input.parentElement?.querySelector('[role="combobox"]') ??
+            null;
+    };
+
     const openSelect = () => {
-        const select = document.getElementById(selectId);
+        const select = findSelect();
         if (!select) {
             attempts += 1;
             if (attempts >= maxAttempts) {
-                console.warn(`[DocsAutofill] MUI select not found: ${selectId}`);
+                console.warn(`[DocsAutofill] MUI select not found by name: ${inputName}`);
                 return;
             }
             setTimeout(openSelect, 50);
