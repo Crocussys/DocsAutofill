@@ -47,8 +47,14 @@ async function copyCheeseGTIN(statusButtonId) {
 async function pasteCheeseGTIN() {
     const date = new Date();
     const today = `${String(date.getDate()).padStart(2,'0')}.${String(date.getMonth()+1).padStart(2,'0')}.${date.getFullYear()}`;
-    selectMuiOptionByName('documentType', '219');
-    selectMuiOptionByName('action', 'OTHER');
+    const okDocumentType = await selectMuiOptionByName('documentType', '219');
+    if (!okDocumentType) {
+        return;
+    }
+    const okAction = await selectMuiOptionByName('action', 'OTHER');
+    if (!okAction) {
+        return;
+    }
     setReactInputValue(document.querySelector('input[name="actionDate"]'), today);
     setReactInputValue(document.querySelector('input[name="actionOther"]'), 'фасовка');
     setReactInputValue(document.querySelector('input[name="sourceDocumentNumber"]'), '1');
