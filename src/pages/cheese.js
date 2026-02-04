@@ -113,13 +113,108 @@ async function pasteCheeseGTIN() {
         return false;
     };
 
+    const setInputValueNoBlur = (input, value) => {
+        if (!input) return;
+        const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(input, value);
+        ['input', 'change'].forEach(evt =>
+            input.dispatchEvent(new Event(evt, { bubbles: true }))
+        );
+    };
+
+    const setQuantityValue = async (input, value) => {
+        const qtyValue = String(value).trim();
+        if (!/^\d+$/.test(qtyValue)) {
+            return false;
+        }
+        input.focus();
+        setInputValueNoBlur(input, '');
+        setInputValueNoBlur(input, qtyValue);
+        const ok = await waitForExactValue(input, qtyValue, 800);
+        if (!ok) {
+            return false;
+        }
+        await new Promise(resolve => setTimeout(resolve, 200));
+        return input.value === qtyValue && /^\d+$/.test(input.value);
+    };
+
+    const normalizeText = (text) => text.replace(/\s+/g, ' ').trim();
+
+    const findGtinOption = (input, value) => {
+        const target = normalizeText(String(value));
+        const listboxes = [];
+        const listboxId = input.getAttribute('aria-controls');
+        if (listboxId) {
+            const lb = document.getElementById(listboxId);
+            if (lb) listboxes.push(lb);
+        }
+        document.querySelectorAll('ul[role="listbox"]').forEach(lb => listboxes.push(lb));
+
+        const uniqueListboxes = [];
+        const seen = new Set();
+        for (const lb of listboxes) {
+            if (!seen.has(lb)) {
+                seen.add(lb);
+                uniqueListboxes.push(lb);
+            }
+        }
+
+        for (const listbox of uniqueListboxes) {
+            const options = Array.from(listbox.querySelectorAll('li[role="option"]'));
+            if (options.length === 1) {
+                return options[0];
+            }
+            if (options.length > 1) {
+                return { multiple: true };
+            }
+            const exact = options.find(opt => normalizeText(opt.textContent || '') === target);
+            if (exact) return exact;
+            const byValue = options.find(opt => opt.getAttribute('data-value') === target);
+            if (byValue) return byValue;
+            const contains = options.find(opt => normalizeText(opt.textContent || '').includes(target));
+            if (contains) return contains;
+        }
+        return null;
+    };
+
+    const waitForGtinOption = async (input, value, timeoutMs = 1500) => {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            const option = findGtinOption(input, value);
+            if (option) return option;
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        return null;
+    };
+
+    const setGtinValue = async (input, value) => {
+        input.focus();
+        setInputValueNoBlur(input, value);
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
+        input.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
+
+        const option = await waitForGtinOption(input, value);
+        if (option && option.multiple) {
+            console.warn('[DocsAutofill] Multiple GTIN options found. Aborting to avoid wrong selection.');
+            return false;
+        }
+        if (!option) {
+            console.warn('[DocsAutofill] GTIN option not found. Aborting to avoid wrong selection.');
+            return false;
+        }
+        option.click();
+        return waitForExactValue(input, value, 1000);
+    };
+
     const getRows = () => Array.from(document.querySelectorAll('div[data-test="product.row"]'));
+
+    const normalizeEmptyValue = (value) => (value ?? '').toString().replace(/_/g, '').trim();
 
     const isRowEmpty = (row) => {
         const gtinInput = findRowInput(row, gtinSelectors);
         const qtyInput = findRowInput(row, qtySelectors);
-        const gtinValue = gtinInput?.value?.trim() ?? '';
-        const qtyValue = qtyInput?.value?.trim() ?? '';
+        const gtinValue = normalizeEmptyValue(gtinInput?.value);
+        const qtyValue = normalizeEmptyValue(qtyInput?.value);
         return gtinValue === '' && qtyValue === '';
     };
 
@@ -189,16 +284,14 @@ async function pasteCheeseGTIN() {
             break;
         }
 
-        setReactInputValue(gtinInput, String(gtin));
-        setReactInputValue(qtyInput, qtyValue);
-
-        const gtinOk = await waitForExactValue(gtinInput, String(gtin));
+        const gtinOk = await setGtinValue(gtinInput, String(gtin));
         if (!gtinOk) {
             console.warn('[DocsAutofill] GTIN was not set. Aborting to avoid overwriting existing data.');
             break;
         }
-        const qtyOk = await waitForExactValue(qtyInput, qtyValue);
-        if (!qtyOk || !/^\d+$/.test(qtyInput.value)) {
+
+        const qtyOk = await setQuantityValue(qtyInput, qtyValue);
+        if (!qtyOk) {
             console.warn('[DocsAutofill] Quantity was not set as integer. Aborting to avoid overwriting existing data.');
             break;
         }
