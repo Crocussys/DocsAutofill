@@ -5,6 +5,10 @@ async function getDataFromClipboard() {
 
 function copyCheeseGTIN() {
     const container = document.querySelector('#redesign-portal div.ReactVirtualizedGrid.ReactVirtualizedList > div');
+    if (!container) {
+        console.warn('[DocsAutofill] GTIN container not found for copy.');
+        return;
+    }
     const rows = container.querySelectorAll('.DataRow');
     const gtins = {};
     rows.forEach(row => {
@@ -71,7 +75,7 @@ function init() {
             id: 'docsautofill-copy-cheese',
             text: 'Копировать сыры',
             onClick: copyCheeseGTIN,
-            size: { width: '130px', height: '50px' },
+            size: { width: '250px', height: '20px' },
             getContainer: () => {
                 const portal = document.querySelector('#redesign-portal');
                 if (!portal) {
@@ -108,7 +112,12 @@ function init() {
         button.id = config.id;
         button.style.marginLeft = '8px';
         if (config.insertAfter) {
-            container.insertAdjacentElement('afterend', button);
+            const firstChild = container.firstElementChild;
+            if (firstChild) {
+                firstChild.insertAdjacentElement('afterend', button);
+            } else {
+                container.appendChild(button);
+            }
         } else {
             container.appendChild(button);
         }
