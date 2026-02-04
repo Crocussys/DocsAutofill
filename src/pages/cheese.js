@@ -3,7 +3,7 @@ async function getDataFromClipboard() {
     return text ? JSON.parse(text) : {};
 }
 
-function showStatusMessage(buttonId, durationMs = 5000) {
+function showStatusMessage(buttonId, durationMs = 1000) {
     const status = document.getElementById(`${buttonId}-status`);
     if (!status) {
         return;
@@ -62,39 +62,118 @@ async function pasteCheeseGTIN() {
     if (!rowsContainer) {
         return;
     }
-    let resolveRow;
-    const observer = new MutationObserver(() => {
-        const rows = document.querySelectorAll('div[data-test="product.row"]');
-        if (rows.length > 0 && resolveRow) {
-            const r = rows[rows.length - 1];
-            resolveRow(r);
-            resolveRow = null;
+
+    const findRowInput = (row, selectors) => {
+        for (const selector of selectors) {
+            const el = row.querySelector(selector);
+            if (el) {
+                return el;
+            }
         }
+        return null;
+    };
+
+    const waitForRowInput = async (row, selectors, timeoutMs = 2000) => {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            const el = findRowInput(row, selectors);
+            if (el) {
+                return el;
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        return null;
+    };
+
+    const gtinSelectors = [
+        'input[name*="[compositeProductKey]"]',
+        'input[name*="compositeProductKey"]',
+        'input[name*="[gtin]"]',
+        'input[name*="gtin"]',
+        'input[aria-label*="GTIN"]',
+        'input[placeholder*="GTIN"]'
+    ];
+
+    const qtySelectors = [
+        'input[name*="[quantity]"]',
+        'input[name*="quantity"]'
+    ];
+
+    const getRows = () => Array.from(document.querySelectorAll('div[data-test="product.row"]'));
+
+    const isRowEmpty = (row) => {
+        const gtinInput = findRowInput(row, gtinSelectors);
+        const qtyInput = findRowInput(row, qtySelectors);
+        const gtinValue = gtinInput?.value?.trim() ?? '';
+        const qtyValue = qtyInput?.value?.trim() ?? '';
+        return gtinValue === '' && qtyValue === '';
+    };
+
+    const waitForNewRow = (rowsBefore, timeoutMs = 2000) => new Promise(resolve => {
+        const observer = new MutationObserver(() => {
+            const rowsNow = getRows();
+            const newRow = rowsNow.find(r => !rowsBefore.has(r));
+            if (newRow) {
+                observer.disconnect();
+                resolve(newRow);
+            }
+        });
+        observer.observe(rowsContainer, { childList: true, subtree: true });
+        setTimeout(() => {
+            observer.disconnect();
+            resolve(null);
+        }, timeoutMs);
     });
-    observer.observe(rowsContainer, { childList: true, subtree: true });
+
+    const usedRows = new WeakSet();
+
     let first = true;
     for (const [gtin, quantity] of Object.entries(data)) {
-        if (!first) {
-            const btnAdd = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Добавить строку');
-            btnAdd?.click();
+        const rowsBefore = new Set(getRows());
+        let targetRow = null;
+
+        const existingEmptyRow = getRows().find(row => !usedRows.has(row) && isRowEmpty(row));
+        if (first && existingEmptyRow) {
+            targetRow = existingEmptyRow;
         } else {
-            first = false;
+            const btnAdd = [...document.querySelectorAll('button')]
+                .find(b => b.textContent.trim() === 'Добавить строку');
+            btnAdd?.click();
+            targetRow = await waitForNewRow(rowsBefore);
         }
-        const lastRow = await new Promise(resolve => resolveRow = resolve);
-        const gtinInput = lastRow.querySelector('input[name*="[compositeProductKey]"]');
-        if (gtinInput) {
-            setReactInputValue(gtinInput, gtin);
+        first = false;
+
+        if (!targetRow) {
+            targetRow = getRows().find(row => !usedRows.has(row) && isRowEmpty(row)) || null;
         }
-        const qtyInput = lastRow.querySelector('input[name*="[quantity]"]');
-        if (qtyInput) {
-            setReactInputValue(qtyInput, quantity);
+        if (!targetRow) {
+            console.warn('[DocsAutofill] New row not found. Aborting to avoid overwriting existing data.');
+            break;
         }
+
+        usedRows.add(targetRow);
+
+        const gtinInput = await waitForRowInput(targetRow, gtinSelectors);
+        const qtyInput = await waitForRowInput(targetRow, qtySelectors);
+        if (!gtinInput || !qtyInput) {
+            console.warn('[DocsAutofill] Row inputs not found. Aborting to avoid overwriting existing data.');
+            break;
+        }
+
+        setReactInputValue(gtinInput, gtin);
+        setReactInputValue(qtyInput, quantity);
     }
-    observer.disconnect();
 }
 
 
 function init() {
+    const normalizePath = (path) => {
+        if (path.length > 1 && path.endsWith('/')) {
+            return path.slice(0, -1);
+        }
+        return path;
+    };
+
     const BUTTONS = {
         '/warehouse': {
             id: 'docsautofill-copy-cheese',
@@ -148,7 +227,20 @@ function init() {
     };
 
     const observer = new MutationObserver(() => {
-        const path = window.location.pathname;
+        const path = normalizePath(window.location.pathname);
+        Object.entries(BUTTONS).forEach(([key, cfg]) => {
+            if (normalizePath(key) !== path) {
+                const wrapper = document.getElementById(`${cfg.id}-wrapper`);
+                if (wrapper) {
+                    wrapper.remove();
+                }
+                const button = document.getElementById(cfg.id);
+                if (button) {
+                    button.remove();
+                }
+            }
+        });
+
         const config = BUTTONS[path];
         if (!config) {
             return;
@@ -185,6 +277,7 @@ function init() {
                 status.style.transition = 'opacity 0.3s ease';
                 status.style.color = '#2e7d32';
                 status.style.fontSize = '14px';
+                status.style.marginLeft = '8px';
                 status.style.pointerEvents = 'none';
                 status.style.userSelect = 'none';
             }
