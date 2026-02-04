@@ -166,64 +166,32 @@ async function pasteCheeseGTIN() {
         return input.value === qtyValue && /^\d+$/.test(input.value);
     };
 
-    const normalizeText = (text) => text.replace(/\s+/g, ' ').trim();
-
-    const getListboxesForInput = (input) => {
-        const candidates = [];
-        const ids = [input.getAttribute('aria-controls'), input.getAttribute('aria-owns'), input.id]
-            .filter(Boolean);
-        for (const id of ids) {
-            const byId = document.getElementById(id);
-            if (byId && byId.getAttribute('role') === 'listbox') {
-                candidates.push(byId);
-            }
-            const listbox = document.getElementById(`${id}-listbox`);
-            if (listbox) {
-                candidates.push(listbox);
-            }
-        }
-        document.querySelectorAll('[role="listbox"]').forEach(lb => candidates.push(lb));
-
-        const unique = [];
-        const seen = new Set();
-        for (const lb of candidates) {
-            if (!seen.has(lb)) {
-                seen.add(lb);
-                unique.push(lb);
-            }
-        }
-        return unique.filter(lb => {
-            const rect = lb.getBoundingClientRect();
-            return rect.width > 0 && rect.height > 0;
-        });
-    };
-
-    const findGtinOption = (input, value) => {
-        const target = normalizeText(String(value));
-        const listboxes = getListboxesForInput(input);
-        for (const listbox of listboxes) {
-            const options = Array.from(listbox.querySelectorAll('[role="option"]'));
-            if (options.length === 1) {
-                return options[0];
-            }
-            if (options.length > 1) {
-                return { multiple: true };
-            }
-            const exact = options.find(opt => normalizeText(opt.textContent || '') === target);
-            if (exact) return exact;
-            const byValue = options.find(opt => opt.getAttribute('data-value') === target);
-            if (byValue) return byValue;
-            const contains = options.find(opt => normalizeText(opt.textContent || '').includes(target));
-            if (contains) return contains;
-        }
-        return null;
-    };
-
-    const waitForGtinOption = async (input, value, timeoutMs = 3000) => {
+    const waitForGtinListbox = async (input, timeoutMs = 3000) => {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
-            const option = findGtinOption(input, value);
-            if (option) return option;
+            const ids = [
+                input.getAttribute('aria-controls'),
+                input.getAttribute('aria-owns'),
+                input.id ? `${input.id}-listbox` : null
+            ].filter(Boolean);
+
+            for (const id of ids) {
+                const byId = document.getElementById(id);
+                if (byId) {
+                    const listbox = byId.getAttribute('role') === 'listbox'
+                        ? byId
+                        : byId.querySelector?.('[role="listbox"]');
+                    if (listbox) {
+                        return listbox;
+                    }
+                }
+            }
+
+            const scoped = input.closest('.MuiAutocomplete-root')?.querySelector('[role="listbox"]');
+            if (scoped) {
+                return scoped;
+            }
+
             await new Promise(resolve => setTimeout(resolve, 50));
         }
         return null;
@@ -249,16 +217,21 @@ async function pasteCheeseGTIN() {
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
         input.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
 
-        const option = await waitForGtinOption(input, value);
-        if (option && option.multiple) {
-            console.warn('[DocsAutofill] Multiple GTIN options found. Aborting to avoid wrong selection.');
+        const listbox = await waitForGtinListbox(input);
+        if (!listbox) {
+            console.warn('[DocsAutofill] GTIN listbox not found. Aborting to avoid wrong selection.');
             return false;
         }
-        if (!option) {
+        const options = Array.from(listbox.querySelectorAll('[role="option"]'));
+        if (options.length === 0) {
             console.warn('[DocsAutofill] GTIN option not found. Aborting to avoid wrong selection.');
             return false;
         }
-        option.click();
+        if (options.length > 1) {
+            console.warn('[DocsAutofill] Multiple GTIN options found. Aborting to avoid wrong selection.');
+            return false;
+        }
+        options[0].click();
         input.dispatchEvent(new Event('change', { bubbles: true }));
         return true;
     };
