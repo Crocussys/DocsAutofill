@@ -133,30 +133,33 @@ async function pasteCheeseGTIN() {
 
     const usedRows = new WeakSet();
 
-    let first = true;
+    let isFirst = true;
     for (const [gtin, quantity] of Object.entries(data)) {
-        const rowsBefore = new Set(getRows());
         let targetRow = null;
 
-        const existingEmptyRow = getRows().find(row => !usedRows.has(row) && isRowEmpty(row));
-        if (first && existingEmptyRow) {
-            targetRow = existingEmptyRow;
+        if (isFirst) {
+            targetRow = getRows().find(row => !usedRows.has(row) && isRowEmpty(row)) || null;
+            if (!targetRow) {
+                console.warn('[DocsAutofill] Empty first row not found. Aborting to avoid overwriting existing data.');
+                break;
+            }
         } else {
+            const rowsBefore = new Set(getRows());
             const btnAdd = [...document.querySelectorAll('button')]
                 .find(b => b.textContent.trim() === 'Добавить строку');
-            btnAdd?.click();
+            if (!btnAdd) {
+                console.warn('[DocsAutofill] \"Добавить строку\" button not found. Aborting to avoid overwriting existing data.');
+                break;
+            }
+            btnAdd.click();
             targetRow = await waitForNewRow(rowsBefore);
-        }
-        first = false;
-
-        if (!targetRow) {
-            targetRow = getRows().find(row => !usedRows.has(row) && isRowEmpty(row)) || null;
-        }
-        if (!targetRow) {
-            console.warn('[DocsAutofill] New row not found. Aborting to avoid overwriting existing data.');
-            break;
+            if (!targetRow) {
+                console.warn('[DocsAutofill] New row not found. Aborting to avoid overwriting existing data.');
+                break;
+            }
         }
 
+        isFirst = false;
         usedRows.add(targetRow);
 
         const gtinInput = await waitForRowInput(targetRow, gtinSelectors);
@@ -166,8 +169,14 @@ async function pasteCheeseGTIN() {
             break;
         }
 
-        setReactInputValue(gtinInput, gtin);
-        setReactInputValue(qtyInput, quantity);
+        const qtyValue = String(quantity).replace(/\D/g, '');
+        if (!qtyValue) {
+            console.warn('[DocsAutofill] Quantity is not a valid integer. Aborting to avoid overwriting existing data.');
+            break;
+        }
+
+        setReactInputValue(gtinInput, String(gtin));
+        setReactInputValue(qtyInput, qtyValue);
     }
 }
 
