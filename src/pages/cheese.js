@@ -4,12 +4,7 @@ async function getDataFromClipboard() {
 }
 
 function copyCheeseGTIN() {
-    const container = document.querySelector('#redesign-portal div.ReactVirtualizedGrid.ReactVirtualizedList > div');
-    if (!container) {
-        console.warn('[DocsAutofill] GTIN container not found for copy.');
-        return;
-    }
-    const rows = container.querySelectorAll('.DataRow');
+    const rows = document.querySelector("#redesign-portal > div.MuiBox-root.css-1ac1t1g > div:nth-child(1) > div > div.ReactVirtualizedGrid.ReactVirtualizedList > div");
     const gtins = {};
     rows.forEach(row => {
         if (row.querySelector('[data-column="name"]')?.innerText.startsWith('Сыр ')) {
@@ -75,7 +70,7 @@ function init() {
             id: 'docsautofill-copy-cheese',
             text: 'Копировать сыры',
             onClick: copyCheeseGTIN,
-            size: { width: '250px', height: '20px' },
+            size: { width: '150px', height: '40px' },
             getContainer: () => {
                 const portal = document.querySelector('#redesign-portal');
                 if (!portal) {
