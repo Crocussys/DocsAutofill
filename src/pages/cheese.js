@@ -113,6 +113,34 @@ async function pasteCheeseGTIN() {
         return false;
     };
 
+    const normalizeValue = (value) => (value ?? '').toString().replace(/_/g, '').trim();
+
+    const waitForGtinApplied = async (input, expected, timeoutMs = 1000) => {
+        const expectedStr = String(expected);
+        const expectedDigits = expectedStr.replace(/\D/g, '');
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            const current = normalizeValue(input?.value);
+            if (current) {
+                const currentDigits = current.replace(/\D/g, '');
+                if (!expectedDigits) {
+                    return true;
+                }
+                if (current.includes(expectedStr)) {
+                    return true;
+                }
+                if (!currentDigits) {
+                    return true;
+                }
+                if (currentDigits.includes(expectedDigits)) {
+                    return true;
+                }
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        return false;
+    };
+
     const setInputValueNoBlur = (input, value) => {
         if (!input) return;
         const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
@@ -203,7 +231,7 @@ async function pasteCheeseGTIN() {
             return false;
         }
         option.click();
-        return waitForExactValue(input, value, 1000);
+        return waitForGtinApplied(input, value, 1000);
     };
 
     const getRows = () => Array.from(document.querySelectorAll('div[data-test="product.row"]'));
