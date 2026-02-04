@@ -231,7 +231,7 @@ async function pasteCheeseGTIN() {
             return false;
         }
         option.click();
-        return waitForGtinApplied(input, value, 1000);
+        return true;
     };
 
     const getRows = () => Array.from(document.querySelectorAll('div[data-test="product.row"]'));
@@ -246,21 +246,31 @@ async function pasteCheeseGTIN() {
         return gtinValue === '' && qtyValue === '';
     };
 
-    const waitForNewRow = (rowsBefore, timeoutMs = 2000) => new Promise(resolve => {
-        const observer = new MutationObserver(() => {
+    const waitForNewRow = async (rowsBefore, emptyRowsBefore, timeoutMs = 2000) => {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
             const rowsNow = getRows();
-            const newRow = rowsNow.find(r => !rowsBefore.has(r));
-            if (newRow) {
-                observer.disconnect();
-                resolve(newRow);
+            const newRows = rowsNow.filter(r => !rowsBefore.has(r));
+            if (newRows.length === 1) {
+                return newRows[0];
             }
-        });
-        observer.observe(rowsContainer, { childList: true, subtree: true });
-        setTimeout(() => {
-            observer.disconnect();
-            resolve(null);
-        }, timeoutMs);
-    });
+            if (newRows.length > 1) {
+                return { multiple: true };
+            }
+
+            const emptyNow = rowsNow.filter(r => !usedRows.has(r) && isRowEmpty(r));
+            const newEmpty = emptyNow.filter(r => !emptyRowsBefore.has(r));
+            if (newEmpty.length === 1) {
+                return newEmpty[0];
+            }
+            if (newEmpty.length > 1) {
+                return { multiple: true };
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        return null;
+    };
 
     const usedRows = new WeakSet();
 
@@ -276,6 +286,7 @@ async function pasteCheeseGTIN() {
             }
         } else {
             const rowsBefore = new Set(getRows());
+            const emptyRowsBefore = new Set(getRows().filter(r => !usedRows.has(r) && isRowEmpty(r)));
             const btnAdd = [...document.querySelectorAll('button')]
                 .find(b => b.textContent.trim() === 'Добавить строку');
             if (!btnAdd) {
@@ -283,7 +294,11 @@ async function pasteCheeseGTIN() {
                 break;
             }
             btnAdd.click();
-            targetRow = await waitForNewRow(rowsBefore);
+            targetRow = await waitForNewRow(rowsBefore, emptyRowsBefore);
+            if (targetRow && targetRow.multiple) {
+                console.warn('[DocsAutofill] Multiple new rows detected. Aborting to avoid overwriting existing data.');
+                break;
+            }
             if (!targetRow) {
                 console.warn('[DocsAutofill] New row not found. Aborting to avoid overwriting existing data.');
                 break;
