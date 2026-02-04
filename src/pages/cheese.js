@@ -168,27 +168,41 @@ async function pasteCheeseGTIN() {
 
     const normalizeText = (text) => text.replace(/\s+/g, ' ').trim();
 
-    const findGtinOption = (input, value) => {
-        const target = normalizeText(String(value));
-        const listboxes = [];
-        const listboxId = input.getAttribute('aria-controls');
-        if (listboxId) {
-            const lb = document.getElementById(listboxId);
-            if (lb) listboxes.push(lb);
-        }
-        document.querySelectorAll('ul[role="listbox"]').forEach(lb => listboxes.push(lb));
-
-        const uniqueListboxes = [];
-        const seen = new Set();
-        for (const lb of listboxes) {
-            if (!seen.has(lb)) {
-                seen.add(lb);
-                uniqueListboxes.push(lb);
+    const getListboxesForInput = (input) => {
+        const candidates = [];
+        const ids = [input.getAttribute('aria-controls'), input.getAttribute('aria-owns'), input.id]
+            .filter(Boolean);
+        for (const id of ids) {
+            const byId = document.getElementById(id);
+            if (byId && byId.getAttribute('role') === 'listbox') {
+                candidates.push(byId);
+            }
+            const listbox = document.getElementById(`${id}-listbox`);
+            if (listbox) {
+                candidates.push(listbox);
             }
         }
+        document.querySelectorAll('[role="listbox"]').forEach(lb => candidates.push(lb));
 
-        for (const listbox of uniqueListboxes) {
-            const options = Array.from(listbox.querySelectorAll('li[role="option"]'));
+        const unique = [];
+        const seen = new Set();
+        for (const lb of candidates) {
+            if (!seen.has(lb)) {
+                seen.add(lb);
+                unique.push(lb);
+            }
+        }
+        return unique.filter(lb => {
+            const rect = lb.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+        });
+    };
+
+    const findGtinOption = (input, value) => {
+        const target = normalizeText(String(value));
+        const listboxes = getListboxesForInput(input);
+        for (const listbox of listboxes) {
+            const options = Array.from(listbox.querySelectorAll('[role="option"]'));
             if (options.length === 1) {
                 return options[0];
             }
@@ -215,10 +229,23 @@ async function pasteCheeseGTIN() {
         return null;
     };
 
+    const openAutocompleteList = (input) => {
+        const root = input.closest('.MuiAutocomplete-root') ?? input.parentElement;
+        const indicator = root?.querySelector('.MuiAutocomplete-popupIndicator') ??
+            root?.querySelector('button[aria-label*="Open"]');
+        if (indicator) {
+            indicator.click();
+            return;
+        }
+        input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        input.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    };
+
     const setGtinValue = async (input, value) => {
         input.focus();
         setInputValueNoBlur(input, value);
         input.dispatchEvent(new Event('input', { bubbles: true }));
+        openAutocompleteList(input);
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
         input.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
 
@@ -260,7 +287,7 @@ async function pasteCheeseGTIN() {
                 return { multiple: true };
             }
 
-            const emptyNow = rowsNow.filter(r => !usedRows.has(r) && isRowEmpty(r));
+            const emptyNow = rowsNow.filter(r => isRowEmpty(r));
             const newEmpty = emptyNow.filter(r => !emptyRowsBefore.has(r));
             if (newEmpty.length === 1) {
                 return newEmpty[0];
@@ -288,7 +315,7 @@ async function pasteCheeseGTIN() {
             }
         } else {
             const rowsBefore = new Set(getRows());
-            const emptyRowsBefore = new Set(getRows().filter(r => !usedRows.has(r) && isRowEmpty(r)));
+            const emptyRowsBefore = new Set(getRows().filter(r => isRowEmpty(r)));
             const btnAdd = [...document.querySelectorAll('button')]
                 .find(b => b.textContent.trim() === 'Добавить строку');
             if (!btnAdd) {
