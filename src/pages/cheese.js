@@ -93,17 +93,25 @@ async function pasteCheeseGTIN() {
 
     const gtinSelectors = [
         'input[name*="[compositeProductKey]"]',
-        'input[name*="compositeProductKey"]',
-        'input[name*="[gtin]"]',
-        'input[name*="gtin"]',
-        'input[aria-label*="GTIN"]',
-        'input[placeholder*="GTIN"]'
+        'input[name*="compositeProductKey"]'
     ];
 
     const qtySelectors = [
         'input[name*="[quantity]"]',
         'input[name*="quantity"]'
     ];
+
+    const waitForExactValue = async (input, expected, timeoutMs = 500) => {
+        const expectedStr = String(expected);
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            if ((input?.value ?? '') === expectedStr) {
+                return true;
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        return false;
+    };
 
     const getRows = () => Array.from(document.querySelectorAll('div[data-test="product.row"]'));
 
@@ -163,20 +171,37 @@ async function pasteCheeseGTIN() {
         usedRows.add(targetRow);
 
         const gtinInput = await waitForRowInput(targetRow, gtinSelectors);
-        const qtyInput = await waitForRowInput(targetRow, qtySelectors);
-        if (!gtinInput || !qtyInput) {
-            console.warn('[DocsAutofill] Row inputs not found. Aborting to avoid overwriting existing data.');
+        if (!gtinInput || !gtinInput.name || !gtinInput.name.includes('[compositeProductKey]')) {
+            console.warn('[DocsAutofill] GTIN input not found or name is unexpected. Aborting to avoid overwriting existing data.');
             break;
         }
 
-        const qtyValue = String(quantity).replace(/\D/g, '');
-        if (!qtyValue) {
+        const qtyName = gtinInput.name.replace('[compositeProductKey]', '[quantity]');
+        const qtyInput = targetRow.querySelector(`input[name="${qtyName}"]`);
+        if (!qtyInput) {
+            console.warn('[DocsAutofill] Quantity input not found for GTIN row. Aborting to avoid overwriting existing data.');
+            break;
+        }
+
+        const qtyValue = String(quantity).trim();
+        if (!/^\d+$/.test(qtyValue)) {
             console.warn('[DocsAutofill] Quantity is not a valid integer. Aborting to avoid overwriting existing data.');
             break;
         }
 
         setReactInputValue(gtinInput, String(gtin));
         setReactInputValue(qtyInput, qtyValue);
+
+        const gtinOk = await waitForExactValue(gtinInput, String(gtin));
+        if (!gtinOk) {
+            console.warn('[DocsAutofill] GTIN was not set. Aborting to avoid overwriting existing data.');
+            break;
+        }
+        const qtyOk = await waitForExactValue(qtyInput, qtyValue);
+        if (!qtyOk || !/^\d+$/.test(qtyInput.value)) {
+            console.warn('[DocsAutofill] Quantity was not set as integer. Aborting to avoid overwriting existing data.');
+            break;
+        }
     }
 }
 
