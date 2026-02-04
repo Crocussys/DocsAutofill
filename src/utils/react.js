@@ -8,14 +8,38 @@ function setReactInputValue(input, value) {
 }
 
 function selectMuiOption(selectId, value) {
-    const select = document.getElementById(selectId);
-    select.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    const maxAttempts = 40;
+    let attempts = 0;
 
-    const interval = setInterval(() => {
-        const option = document.querySelector(`li[role="option"][data-value="${value}"]`);
-        if (option) {
-            option.click();
-            clearInterval(interval);
+    const openSelect = () => {
+        const select = document.getElementById(selectId);
+        if (!select) {
+            attempts += 1;
+            if (attempts >= maxAttempts) {
+                console.warn(`[DocsAutofill] MUI select not found: ${selectId}`);
+                return;
+            }
+            setTimeout(openSelect, 50);
+            return;
         }
-    }, 50);
+
+        select.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+
+        let optionAttempts = 0;
+        const interval = setInterval(() => {
+            const option = document.querySelector(`li[role="option"][data-value="${value}"]`);
+            if (option) {
+                option.click();
+                clearInterval(interval);
+                return;
+            }
+            optionAttempts += 1;
+            if (optionAttempts >= maxAttempts) {
+                console.warn(`[DocsAutofill] MUI option not found: ${value}`);
+                clearInterval(interval);
+            }
+        }, 50);
+    };
+
+    openSelect();
 }

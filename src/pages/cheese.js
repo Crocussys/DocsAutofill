@@ -135,8 +135,8 @@ function init() {
             button = createButton(config.onClick, config.text, config.size);
             button.id = config.id;
         }
-        button.style.marginLeft = '8px';
-        button.style.paddingLeft = '24px';
+        button.style.marginLeft = '24px';
+        button.style.marginTop = '24px';
         placeButton(container, button, config.insertAfter);
     });
 
