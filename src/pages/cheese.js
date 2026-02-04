@@ -4,10 +4,17 @@ async function getDataFromClipboard() {
 }
 
 function copyCheeseGTIN() {
-    const rows = document.querySelector("#redesign-portal > div.MuiBox-root.css-1ac1t1g > div:nth-child(1) > div > div.ReactVirtualizedGrid.ReactVirtualizedList > div");
+    let rows = document.querySelectorAll('div[data-test="product.row"]');
+    if (!rows || rows.length === 0) {
+        rows = document.querySelectorAll('#redesign-portal .DataRow');
+    }
+    if (!rows || rows.length === 0) {
+        console.warn('[DocsAutofill] GTIN rows not found for copy.');
+        return;
+    }
     const gtins = {};
     rows.forEach(row => {
-        if (row.querySelector('[data-column="name"]')?.innerText.startsWith('Сыр ')) {
+        if (row.querySelector('[data-column="name"]')?.innerText.startsWith('Сыр')) {
             gtins[row.querySelector('[data-column="gtin"] a')?.innerText] = Number(row.querySelector('[data-column="quantity"]')?.innerText.replace(',', '.').match(/\d+(\.\d+)?/)?.[0])
         }
     });
@@ -90,6 +97,29 @@ function init() {
             insertAfter: false
         }
     };
+    const placeButton = (container, button, insertAfter) => {
+        if (!insertAfter) {
+            if (button.parentElement !== container) {
+                container.appendChild(button);
+            }
+            return;
+        }
+        const children = Array.from(container.children);
+        if (children.length === 0) {
+            if (button.parentElement !== container) {
+                container.appendChild(button);
+            }
+            return;
+        }
+        const firstNonButton = children.find(child => child !== button);
+        if (!firstNonButton) {
+            return;
+        }
+        if (firstNonButton.nextElementSibling !== button) {
+            firstNonButton.insertAdjacentElement('afterend', button);
+        }
+    };
+
     const observer = new MutationObserver(() => {
         const path = window.location.pathname;
         const config = BUTTONS[path];
@@ -100,22 +130,14 @@ function init() {
         if (!container) {
             return;
         }
-        if (document.getElementById(config.id)) {
-            return;
+        let button = document.getElementById(config.id);
+        if (!button) {
+            button = createButton(config.onClick, config.text, config.size);
+            button.id = config.id;
         }
-        const button = createButton(config.onClick, config.text, config.size);
-        button.id = config.id;
         button.style.marginLeft = '8px';
-        if (config.insertAfter) {
-            const firstChild = container.firstElementChild;
-            if (firstChild) {
-                firstChild.insertAdjacentElement('afterend', button);
-            } else {
-                container.appendChild(button);
-            }
-        } else {
-            container.appendChild(button);
-        }
+        button.style.paddingLeft = '24px';
+        placeButton(container, button, config.insertAfter);
     });
 
     observer.observe(document.body, {
