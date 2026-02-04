@@ -205,7 +205,7 @@ async function pasteCheeseGTIN() {
         return null;
     };
 
-    const waitForGtinOption = async (input, value, timeoutMs = 1500) => {
+    const waitForGtinOption = async (input, value, timeoutMs = 3000) => {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
             const option = findGtinOption(input, value);
@@ -218,6 +218,7 @@ async function pasteCheeseGTIN() {
     const setGtinValue = async (input, value) => {
         input.focus();
         setInputValueNoBlur(input, value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
         input.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
 
@@ -231,6 +232,7 @@ async function pasteCheeseGTIN() {
             return false;
         }
         option.click();
+        input.dispatchEvent(new Event('change', { bubbles: true }));
         return true;
     };
 
