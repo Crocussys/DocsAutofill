@@ -101,7 +101,7 @@ function init() {
         if (!container) {
             return;
         }
-        if (container.querySelector(`#${config.id}`)) {
+        if (document.getElementById(config.id)) {
             return;
         }
         const button = createButton(config.onClick, config.text, config.size);
