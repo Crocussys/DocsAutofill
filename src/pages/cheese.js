@@ -81,11 +81,29 @@ async function pasteCheeseGTIN() {
         return null;
     };
 
+    const isInteractiveInput = (input) => {
+        if (!input || !input.isConnected) return false;
+        if (input.type === 'hidden') return false;
+        if (input.disabled || input.getAttribute('aria-disabled') === 'true' || input.readOnly) return false;
+        return input.getClientRects().length > 0;
+    };
+
+    const findInteractiveRowInput = (row, selectors) => {
+        for (const selector of selectors) {
+            const candidates = Array.from(row.querySelectorAll(selector));
+            const interactive = candidates.find(isInteractiveInput);
+            if (interactive) {
+                return interactive;
+            }
+        }
+        return findRowInput(row, selectors);
+    };
+
     const waitForInteractiveRowInput = async (row, selectors, timeoutMs = 5000) => {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
-            const input = findRowInput(row, selectors);
-            if (input && input.isConnected && !input.disabled && input.getAttribute('aria-disabled') !== 'true' && !input.readOnly) {
+            const input = findInteractiveRowInput(row, selectors);
+            if (isInteractiveInput(input)) {
                 return input;
             }
             await sleep(50);
@@ -97,8 +115,9 @@ async function pasteCheeseGTIN() {
         const selector = `input[name="${name}"]`;
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
-            const input = document.querySelector(selector);
-            if (input && input.isConnected && !input.disabled && input.getAttribute('aria-disabled') !== 'true' && !input.readOnly) {
+            const candidates = Array.from(document.querySelectorAll(selector));
+            const input = candidates.find(isInteractiveInput) || candidates.find(el => el?.isConnected) || null;
+            if (isInteractiveInput(input)) {
                 return input;
             }
             await sleep(50);
@@ -235,11 +254,7 @@ async function pasteCheeseGTIN() {
             const input = typeof inputOrGetter === 'function'
                 ? await inputOrGetter()
                 : inputOrGetter;
-            if (!input || !input.isConnected) {
-                await sleep(100);
-                continue;
-            }
-            if (input.disabled || input.getAttribute('aria-disabled') === 'true' || input.readOnly) {
+            if (!isInteractiveInput(input)) {
                 await sleep(100);
                 continue;
             }
@@ -295,8 +310,10 @@ async function pasteCheeseGTIN() {
     };
 
     const getGtinInputNames = () => getAllInputsBySelectors(gtinSelectors)
+        .filter(isInteractiveInput)
         .map(input => input.name)
-        .filter(name => name && name.includes('compositeProductKey'));
+        .filter(name => name && name.includes('compositeProductKey'))
+        .filter((name, idx, arr) => arr.indexOf(name) === idx);
 
     const waitForNewGtinInputName = async (namesBefore, timeoutMs = 5000) => {
         const start = Date.now();
@@ -375,7 +392,7 @@ async function pasteCheeseGTIN() {
                 return null;
             }
 
-            console.info(`[DocsAutofill] Add item click attempt ${attempt + 1}/${maxAttempts} for current row.`);
+            console.info(`[DocsAutofill] Add item click retry ${attempt + 1}/${maxAttempts} for current row.`);
             clickElementReliably(btnAdd);
 
             const newGtinName = await waitForNewGtinInputName(namesBefore, 5000);
