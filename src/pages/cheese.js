@@ -113,34 +113,6 @@ async function pasteCheeseGTIN() {
         return false;
     };
 
-    const normalizeValue = (value) => (value ?? '').toString().replace(/_/g, '').trim();
-
-    const waitForGtinApplied = async (input, expected, timeoutMs = 1000) => {
-        const expectedStr = String(expected);
-        const expectedDigits = expectedStr.replace(/\D/g, '');
-        const start = Date.now();
-        while (Date.now() - start < timeoutMs) {
-            const current = normalizeValue(input?.value);
-            if (current) {
-                const currentDigits = current.replace(/\D/g, '');
-                if (!expectedDigits) {
-                    return true;
-                }
-                if (current.includes(expectedStr)) {
-                    return true;
-                }
-                if (!currentDigits) {
-                    return true;
-                }
-                if (currentDigits.includes(expectedDigits)) {
-                    return true;
-                }
-            }
-            await new Promise(resolve => setTimeout(resolve, 50));
-        }
-        return false;
-    };
-
     const setInputValueNoBlur = (input, value) => {
         if (!input) return;
         const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
@@ -166,72 +138,54 @@ async function pasteCheeseGTIN() {
         return input.value === qtyValue && /^\d+$/.test(input.value);
     };
 
-    const waitForGtinListbox = async (input, timeoutMs = 3000) => {
-        const start = Date.now();
-        while (Date.now() - start < timeoutMs) {
-            const ids = [
-                input.getAttribute('aria-controls'),
-                input.getAttribute('aria-owns'),
-                input.id ? `${input.id}-listbox` : null
-            ].filter(Boolean);
-
-            for (const id of ids) {
-                const byId = document.getElementById(id);
-                if (byId) {
-                    const listbox = byId.getAttribute('role') === 'listbox'
-                        ? byId
-                        : byId.querySelector?.('[role="listbox"]');
-                    if (listbox) {
-                        return listbox;
-                    }
-                }
-            }
-
-            const scoped = input.closest('.MuiAutocomplete-root')?.querySelector('[role="listbox"]');
-            if (scoped) {
-                return scoped;
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 50));
+    const findGtinOption = (input) => {
+        const listboxId = input.getAttribute('aria-controls') || input.getAttribute('aria-owns');
+        let listbox = listboxId ? document.getElementById(listboxId) : null;
+        if (!listbox) {
+            listbox = document.querySelector('ul[role="listbox"]');
+        }
+        if (!listbox) {
+            return null;
+        }
+        const options = Array.from(listbox.querySelectorAll('li[role="option"]'));
+        if (options.length === 1) {
+            return options[0];
+        }
+        if (options.length > 1) {
+            return { multiple: true };
         }
         return null;
     };
 
-    const openAutocompleteList = (input) => {
-        const root = input.closest('.MuiAutocomplete-root') ?? input.parentElement;
-        const indicator = root?.querySelector('.MuiAutocomplete-popupIndicator') ??
-            root?.querySelector('button[aria-label*="Open"]');
-        if (indicator) {
-            indicator.click();
-            return;
+    const waitForGtinOption = async (input, timeoutMs = 3000) => {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            const option = findGtinOption(input);
+            if (option) {
+                return option;
+            }
+            await new Promise(resolve => setTimeout(resolve, 50));
         }
-        input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-        input.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        return null;
     };
 
     const setGtinValue = async (input, value) => {
         input.focus();
         setInputValueNoBlur(input, value);
         input.dispatchEvent(new Event('input', { bubbles: true }));
-        openAutocompleteList(input);
         input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
         input.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
 
-        const listbox = await waitForGtinListbox(input);
-        if (!listbox) {
-            console.warn('[DocsAutofill] GTIN listbox not found. Aborting to avoid wrong selection.');
-            return false;
-        }
-        const options = Array.from(listbox.querySelectorAll('[role="option"]'));
-        if (options.length === 0) {
+        const option = await waitForGtinOption(input);
+        if (!option) {
             console.warn('[DocsAutofill] GTIN option not found. Aborting to avoid wrong selection.');
             return false;
         }
-        if (options.length > 1) {
+        if (option.multiple) {
             console.warn('[DocsAutofill] Multiple GTIN options found. Aborting to avoid wrong selection.');
             return false;
         }
-        options[0].click();
+        option.click();
         input.dispatchEvent(new Event('change', { bubbles: true }));
         return true;
     };
@@ -248,31 +202,31 @@ async function pasteCheeseGTIN() {
         return gtinValue === '' && qtyValue === '';
     };
 
-    const waitForNewRow = async (rowsBefore, emptyRowsBefore, timeoutMs = 2000) => {
-        const start = Date.now();
-        while (Date.now() - start < timeoutMs) {
+    const waitForNewRow = (rowsBefore, timeoutMs = 2000) => new Promise(resolve => {
+        let settled = false;
+        const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            observer.disconnect();
+            resolve(result);
+        };
+
+        const checkRows = () => {
             const rowsNow = getRows();
             const newRows = rowsNow.filter(r => !rowsBefore.has(r));
             if (newRows.length === 1) {
-                return newRows[0];
+                finish(newRows[0]);
+            } else if (newRows.length > 1) {
+                finish({ multiple: true });
             }
-            if (newRows.length > 1) {
-                return { multiple: true };
-            }
+        };
 
-            const emptyNow = rowsNow.filter(r => isRowEmpty(r));
-            const newEmpty = emptyNow.filter(r => !emptyRowsBefore.has(r));
-            if (newEmpty.length === 1) {
-                return newEmpty[0];
-            }
-            if (newEmpty.length > 1) {
-                return { multiple: true };
-            }
-
-            await new Promise(resolve => setTimeout(resolve, 50));
-        }
-        return null;
-    };
+        const observer = new MutationObserver(checkRows);
+        observer.observe(rowsContainer, { childList: true, subtree: true });
+        const timer = setTimeout(() => finish(null), timeoutMs);
+        checkRows();
+    });
 
     const usedRows = new WeakSet();
 
@@ -288,7 +242,6 @@ async function pasteCheeseGTIN() {
             }
         } else {
             const rowsBefore = new Set(getRows());
-            const emptyRowsBefore = new Set(getRows().filter(r => isRowEmpty(r)));
             const btnAdd = [...document.querySelectorAll('button')]
                 .find(b => b.textContent.trim() === 'Добавить строку');
             if (!btnAdd) {
@@ -296,7 +249,7 @@ async function pasteCheeseGTIN() {
                 break;
             }
             btnAdd.click();
-            targetRow = await waitForNewRow(rowsBefore, emptyRowsBefore);
+            targetRow = await waitForNewRow(rowsBefore);
             if (targetRow && targetRow.multiple) {
                 console.warn('[DocsAutofill] Multiple new rows detected. Aborting to avoid overwriting existing data.');
                 break;
@@ -331,7 +284,6 @@ async function pasteCheeseGTIN() {
 
         const gtinOk = await setGtinValue(gtinInput, String(gtin));
         if (!gtinOk) {
-            console.warn('[DocsAutofill] GTIN was not set. Aborting to avoid overwriting existing data.');
             break;
         }
 
