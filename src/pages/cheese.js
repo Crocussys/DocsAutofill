@@ -44,35 +44,61 @@ async function copyCheeseGTIN(statusButtonId) {
     }
 }
 
-async function waitForGtinOption(input, timeoutMs = 3000) {
-    const findGtinOption = (input) => {
-        const listboxId = input.getAttribute('aria-controls') || input.getAttribute('aria-owns');
-        let listbox = listboxId ? document.getElementById(listboxId) : null;
-        if (!listbox) {
-            listbox = document.querySelector('ul[role="listbox"]');
-        }
-        if (!listbox) {
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+function extractProductIndex(inputName) {
+    const match = inputName?.match(/^osuProducts\[(\d+)\]\[compositeProductKey\]$/);
+    return match ? Number(match[1]) : -1;
+}
+
+function getProductKeyInputs() {
+    const rows = Array.from(document.querySelectorAll('input[name^="osuProducts["][name$="[compositeProductKey]"]'));
+    rows.sort((a, b) => extractProductIndex(a.name) - extractProductIndex(b.name));
+    return rows;
+}
+
+function findAddItemButton() {
+    const textVariants = [
+        'Добавить товар',
+        'Р”РѕР±Р°РІРёС‚СЊ С‚РѕРІР°СЂ',
+        'Р вЂќР С•Р В±Р В°Р Р†Р С‘РЎвЂљРЎРЉ РЎвЂљР С•Р Р†Р В°РЎР‚'
+    ];
+
+    return Array.from(document.querySelectorAll('button')).find(button => {
+        const label = button.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+        return textVariants.includes(label) || label.includes('товар') || label.includes('РѕРІР°СЂ');
+    }) ?? null;
+}
+
+async function ensureProductRowByPosition(position, waitTimeoutMs = 5000) {
+    let rows = getProductKeyInputs();
+    while (rows.length <= position) {
+        const addButton = findAddItemButton();
+        if (!addButton) {
+            console.warn('[DocsAutofill] Add item button not found.');
             return null;
         }
-        const options = Array.from(listbox.querySelectorAll('li[role="option"]'));
-        if (options.length === 1) {
-            return options[0];
+
+        const previousCount = rows.length;
+        addButton.click();
+
+        const start = Date.now();
+        while (Date.now() - start < waitTimeoutMs) {
+            await sleep(50);
+            rows = getProductKeyInputs();
+            if (rows.length > previousCount) {
+                break;
+            }
         }
-        if (options.length > 1) {
-            return { multiple: true };
+
+        if (rows.length <= previousCount) {
+            console.warn(`[DocsAutofill] Failed to add product row for position ${position}.`);
+            return null;
         }
-        return null;
-    };
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-        const option = findGtinOption(input);
-        if (option) {
-            return option;
-        }
-        await new Promise(resolve => setTimeout(resolve, 50));
     }
-    return null;
-};
+
+    return rows[position] ?? null;
+}
 
 async function pasteCheeseGTIN() {
     const date = new Date();
@@ -90,39 +116,42 @@ async function pasteCheeseGTIN() {
     setReactInputValue(document.querySelector('input[name="sourceDocumentNumber"]'), '1');
     setReactInputValue(document.querySelector('input[name="sourceDocumentDate"]'), today);
     setReactInputValue(document.querySelector('input[name="sourceDocumentName"]'), 'УПД');
+
     const data = await getDataFromClipboard();
     const items = Object.entries(data);
-    for (let index = 0; index < items.length; ++index) {
-        const [gtin, quantity] = items[index];
-        let row = document.querySelector(`input[name="osuProducts[${index}][compositeProductKey]"]`);
-        if (!row) {
-            const addButton = Array.from(document.querySelectorAll('button')).filter(button =>
-                button.textContent?.trim() === 'Добавить товар')[0];
-            addButton?.click();
-            await new Promise(resolve => setTimeout(resolve, 100));
-            row = document.querySelector(`input[name="osuProducts[${index}][compositeProductKey]"]`);
-            if (!row) {
-                console.warn(`[DocsAutofill] Failed to find input for product at index ${index}.`);
-                break;
-            }
+    for (let position = 0; position < items.length; ++position) {
+        const [gtin, quantity] = items[position];
+        const rowInput = await ensureProductRowByPosition(position);
+        if (!rowInput) {
+            console.warn(`[DocsAutofill] Failed to find input for product at position ${position}.`);
+            break;
         }
-        row.focus();
-        setReactInputValue(row, gtin);
-        row.dispatchEvent(new Event('input', { bubbles: true }));
-        row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
-        row.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
-        const option = await waitForGtinOption(input);
-        if (!option) {
-            console.warn('[DocsAutofill] GTIN option not found. Aborting to avoid wrong selection.');
+
+        const okGTIN = await selectMuiOptionByName(rowInput.name, gtin);
+        if (!okGTIN) {
+            console.warn(`[DocsAutofill] Failed to set GTIN: ${gtin}`);
             continue;
         }
-        if (option.multiple) {
-            console.warn('[DocsAutofill] Multiple GTIN options found. Aborting to avoid wrong selection.');
+
+        const productIndex = extractProductIndex(rowInput.name);
+        if (productIndex < 0) {
+            console.warn(`[DocsAutofill] Unexpected row name: ${rowInput.name}`);
             continue;
         }
-        option.click();
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        setReactInputValue(document.querySelector(`input[name="osuProducts[${index}][quantity]"]`), quantity);
+
+        const quantityInput = document.querySelector(`input[name="osuProducts[${productIndex}][quantity]"]`);
+        if (!quantityInput) {
+            console.warn(`[DocsAutofill] Quantity input not found for row ${productIndex}.`);
+            continue;
+        }
+
+        const integerQuantity = Number.parseInt(quantity, 10);
+        if (!Number.isFinite(integerQuantity)) {
+            console.warn(`[DocsAutofill] Invalid quantity for GTIN ${gtin}: ${quantity}`);
+            continue;
+        }
+
+        setReactInputValue(quantityInput, String(integerQuantity));
     }
 }
 
@@ -261,3 +290,4 @@ if (document.readyState === 'loading') {
 } else {
     init();
 }
+
