@@ -76,7 +76,11 @@ async function pasteCheeseGTIN() {
                 break;
             }
         }
+        row.focus();
         setReactInputValue(row, gtin);
+        row.dispatchEvent(new Event('input', { bubbles: true }));
+        row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
+        row.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
         const listboxId = row.getAttribute('aria-controls');
         let listbox = listboxId ? document.getElementById(listboxId) : null;
         if (!listbox) {
@@ -85,12 +89,12 @@ async function pasteCheeseGTIN() {
         }
         const options = Array.from(listbox.querySelectorAll('li[role="option"]'));
         if (options.length === 0) {
-            const option = options[0];
+            options[0].click();
         } else {
             console.warn(`[DocsAutofill] No options found in listbox for product at index ${index}.`);
             break;
         }
-        option.click();
+        row.dispatchEvent(new Event('change', { bubbles: true }));
         setReactInputValue(document.querySelector(`input[name="osuProducts[${index}][quantity]"]`), quantity);
     }
 }
