@@ -44,6 +44,36 @@ async function copyCheeseGTIN(statusButtonId) {
     }
 }
 
+async function waitForGtinOption(input, timeoutMs = 3000) {
+    const findGtinOption = (input) => {
+        const listboxId = input.getAttribute('aria-controls') || input.getAttribute('aria-owns');
+        let listbox = listboxId ? document.getElementById(listboxId) : null;
+        if (!listbox) {
+            listbox = document.querySelector('ul[role="listbox"]');
+        }
+        if (!listbox) {
+            return null;
+        }
+        const options = Array.from(listbox.querySelectorAll('li[role="option"]'));
+        if (options.length === 1) {
+            return options[0];
+        }
+        if (options.length > 1) {
+            return { multiple: true };
+        }
+        return null;
+    };
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        const option = findGtinOption(input);
+        if (option) {
+            return option;
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return null;
+};
+
 async function pasteCheeseGTIN() {
     const date = new Date();
     const today = `${String(date.getDate()).padStart(2,'0')}.${String(date.getMonth()+1).padStart(2,'0')}.${date.getFullYear()}`;
@@ -81,20 +111,17 @@ async function pasteCheeseGTIN() {
         row.dispatchEvent(new Event('input', { bubbles: true }));
         row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
         row.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
-        const listboxId = row.getAttribute('aria-controls');
-        let listbox = listboxId ? document.getElementById(listboxId) : null;
-        if (!listbox) {
-            console.warn(`[DocsAutofill] Failed to find listbox for product at index ${index}.`);
-            break;
+        const option = await waitForGtinOption(input);
+        if (!option) {
+            console.warn('[DocsAutofill] GTIN option not found. Aborting to avoid wrong selection.');
+            continue;
         }
-        const options = Array.from(listbox.querySelectorAll('li[role="option"]'));
-        if (options.length === 0) {
-            options[0].click();
-        } else {
-            console.warn(`[DocsAutofill] No options found in listbox for product at index ${index}.`);
-            break;
+        if (option.multiple) {
+            console.warn('[DocsAutofill] Multiple GTIN options found. Aborting to avoid wrong selection.');
+            continue;
         }
-        row.dispatchEvent(new Event('change', { bubbles: true }));
+        option.click();
+        input.dispatchEvent(new Event('change', { bubbles: true }));
         setReactInputValue(document.querySelector(`input[name="osuProducts[${index}][quantity]"]`), quantity);
     }
 }
