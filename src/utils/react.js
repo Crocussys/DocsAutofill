@@ -7,25 +7,25 @@ function setReactInputValue(input, value) {
     );
 }
 
+const findElements = (inputName) => {
+    const input = document.querySelector(`input[name="${inputName}"]`);
+    if (!input) {
+        return { input: null, combobox: null, labelId: null };
+    }
+    const root = input.closest('.MuiFormControl-root') ?? input.parentElement;
+    const combobox = root?.querySelector('[role="combobox"]') ?? null;
+    const label = root?.querySelector('label') ?? null;
+    return { input, combobox, labelId: label?.id ?? null };
+};
+
 async function selectMuiOptionByName(inputName, value) {
     const maxAttempts = 60;
     const delayMs = 50;
     const targetValue = String(value);
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    const findElements = () => {
-        const input = document.querySelector(`input[name="${inputName}"]`);
-        if (!input) {
-            return { input: null, combobox: null, labelId: null };
-        }
-        const root = input.closest('.MuiFormControl-root') ?? input.parentElement;
-        const combobox = root?.querySelector('[role="combobox"]') ?? null;
-        const label = root?.querySelector('label') ?? null;
-        return { input, combobox, labelId: label?.id ?? null };
-    };
-
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const { input, combobox, labelId } = findElements();
+        const { input, combobox, labelId } = findElements(inputName);
         if (!input || !combobox) {
             await sleep(delayMs);
             continue;
