@@ -70,6 +70,7 @@ async function pasteCheeseGTIN() {
     }
 
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    const isElementVisible = (el) => !!el && el.isConnected && el.getClientRects().length > 0 && el.getAttribute('aria-hidden') !== 'true';
 
     const findRowInput = (row, selectors) => {
         for (const selector of selectors) {
@@ -112,10 +113,10 @@ async function pasteCheeseGTIN() {
     };
 
     const waitForInteractiveInputByName = async (name, timeoutMs = 5000) => {
-        const selector = `input[name="${name}"]`;
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
-            const candidates = Array.from(document.querySelectorAll(selector));
+            const candidates = Array.from(document.querySelectorAll('input'))
+                .filter(input => input?.name === name);
             const input = candidates.find(isInteractiveInput) || candidates.find(el => el?.isConnected) || null;
             if (isInteractiveInput(input)) {
                 return input;
@@ -218,7 +219,7 @@ async function pasteCheeseGTIN() {
             return null;
         }
         const options = listboxes
-            .flatMap(listbox => Array.from(listbox.querySelectorAll('li[role="option"]')))
+            .flatMap(listbox => Array.from(listbox.querySelectorAll('[role="option"]')))
             .filter(option => option.getAttribute('aria-disabled') !== 'true');
         if (options.length === 0) {
             return null;
@@ -232,6 +233,14 @@ async function pasteCheeseGTIN() {
         }
         if (options.length === 1) {
             return options[0];
+        }
+        const highlighted = options.find(option =>
+            option.getAttribute('aria-selected') === 'true' ||
+            option.classList.contains('Mui-focused') ||
+            option.classList.contains('Mui-focusVisible')
+        );
+        if (highlighted) {
+            return { fallback: highlighted };
         }
         return null;
     };
@@ -250,6 +259,7 @@ async function pasteCheeseGTIN() {
 
     const setGtinValue = async (inputOrGetter, value) => {
         const gtinValue = String(value).trim();
+        let hadInteractiveInput = false;
         for (let attempt = 0; attempt < 6; attempt += 1) {
             const input = typeof inputOrGetter === 'function'
                 ? await inputOrGetter()
@@ -258,6 +268,7 @@ async function pasteCheeseGTIN() {
                 await sleep(100);
                 continue;
             }
+            hadInteractiveInput = true;
 
             input.focus();
             input.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
@@ -274,8 +285,12 @@ async function pasteCheeseGTIN() {
                 return false;
             }
             if (option) {
-                option.click();
+                const optionToClick = option.fallback || option;
+                optionToClick.click();
                 input.dispatchEvent(new Event('change', { bubbles: true }));
+                if (option.fallback) {
+                    console.warn('[DocsAutofill] GTIN exact match not found, using highlighted option fallback.');
+                }
                 await sleep(100);
                 return true;
             }
@@ -283,11 +298,16 @@ async function pasteCheeseGTIN() {
             input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', bubbles: true }));
             await sleep(150);
         }
+        if (!hadInteractiveInput) {
+            console.warn('[DocsAutofill] GTIN input not interactive. Aborting to avoid wrong selection.');
+            return false;
+        }
         console.warn('[DocsAutofill] GTIN option not found. Aborting to avoid wrong selection.');
         return false;
     };
 
-    const getRows = () => Array.from(document.querySelectorAll('div[data-test="product.row"]'));
+    const getRows = () => Array.from(document.querySelectorAll('div[data-test="product.row"]'))
+        .filter(isElementVisible);
 
     const getAllInputsBySelectors = (selectors) => {
         const seen = new Set();
@@ -357,21 +377,13 @@ async function pasteCheeseGTIN() {
         checkRows();
     });
 
-    const isElementVisible = (el) => !!el && el.isConnected && el.getClientRects().length > 0;
-
-    const findAddItemButton = () => {
-        const buttons = Array.from(document.querySelectorAll('button'))
-            .filter(button =>
-                button.textContent?.trim() === addButtonLabel &&
-                button.disabled !== true &&
-                button.getAttribute('aria-disabled') !== 'true' &&
-                isElementVisible(button)
-            );
-        if (buttons.length === 0) {
-            return null;
-        }
-        return buttons[buttons.length - 1];
-    };
+    const findAddItemButtons = () => Array.from(document.querySelectorAll('button'))
+        .filter(button =>
+            button.textContent?.trim() === addButtonLabel &&
+            button.disabled !== true &&
+            button.getAttribute('aria-disabled') !== 'true' &&
+            isElementVisible(button)
+        );
 
     const clickElementReliably = (el) => {
         if (!el) return;
@@ -387,27 +399,31 @@ async function pasteCheeseGTIN() {
             const rowsBefore = new Set(getRows());
             const rowsBeforeCount = rowsBefore.size;
             const namesBefore = new Set(getGtinInputNames());
-            const btnAdd = findAddItemButton();
-            if (!btnAdd) {
+            const buttons = findAddItemButtons();
+            if (buttons.length === 0) {
                 return null;
             }
 
-            console.info(`[DocsAutofill] Add item click retry ${attempt + 1}/${maxAttempts} for current row.`);
-            clickElementReliably(btnAdd);
+            const orderedButtons = [...buttons].reverse();
+            for (let buttonIndex = 0; buttonIndex < orderedButtons.length; buttonIndex += 1) {
+                const btnAdd = orderedButtons[buttonIndex];
+                console.info(`[DocsAutofill] Add item click retry ${attempt + 1}/${maxAttempts}, button ${buttonIndex + 1}/${orderedButtons.length}.`);
+                clickElementReliably(btnAdd);
 
-            const newGtinName = await waitForNewGtinInputName(namesBefore, 5000);
-            if (newGtinName) {
-                console.info('[DocsAutofill] New row detected after add item click.');
-                return newGtinName;
-            }
+                const newGtinName = await waitForNewGtinInputName(namesBefore, 2000);
+                if (newGtinName) {
+                    console.info('[DocsAutofill] New row detected after add item click.');
+                    return newGtinName;
+                }
 
-            await waitForNewRow(rowsBefore, 5000);
-            const rowsAfter = getRows();
-            if (rowsAfter.length > rowsBeforeCount) {
-                const newGtinNameAfterGrowth = await waitForNewGtinInputName(namesBefore, 1200);
-                if (newGtinNameAfterGrowth) {
-                    console.info('[DocsAutofill] New row detected by row count growth.');
-                    return newGtinNameAfterGrowth;
+                await waitForNewRow(rowsBefore, 2000);
+                const rowsAfter = getRows();
+                if (rowsAfter.length > rowsBeforeCount) {
+                    const newGtinNameAfterGrowth = await waitForNewGtinInputName(namesBefore, 1200);
+                    if (newGtinNameAfterGrowth) {
+                        console.info('[DocsAutofill] New row detected by row count growth.');
+                        return newGtinNameAfterGrowth;
+                    }
                 }
             }
 
@@ -436,8 +452,7 @@ async function pasteCheeseGTIN() {
                 break;
             }
         } else {
-            const btnAdd = findAddItemButton();
-            if (!btnAdd) {
+            if (findAddItemButtons().length === 0) {
                 console.warn('[DocsAutofill] Add item button not found. Aborting to avoid overwriting existing data.');
                 break;
             }
