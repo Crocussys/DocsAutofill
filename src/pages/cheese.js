@@ -64,7 +64,8 @@ async function pasteCheeseGTIN() {
     if (!data || Object.keys(data).length === 0) {
         return;
     }
-    if (!document.querySelector('#redesign-portal')) {
+    const rowsContainer = document.querySelector('#redesign-portal');
+    if (!rowsContainer) {
         return;
     }
 
@@ -184,6 +185,9 @@ async function pasteCheeseGTIN() {
         if (matched.length > 1) {
             return { multiple: true };
         }
+        if (options.length === 1) {
+            return options[0];
+        }
         return null;
     };
 
@@ -217,16 +221,12 @@ async function pasteCheeseGTIN() {
         return false;
     };
 
-    const setGtinValue = async (getInput, value) => {
+    const setGtinValue = async (input, value) => {
         const gtinValue = String(value).trim();
         const targetDigits = normalizeDigits(gtinValue);
         for (let attempt = 0; attempt < 6; attempt += 1) {
-            const input = typeof getInput === 'function'
-                ? await getInput()
-                : getInput;
             if (!input || !input.isConnected) {
-                await sleep(100);
-                continue;
+                return false;
             }
             if (input.disabled || input.getAttribute('aria-disabled') === 'true' || input.readOnly) {
                 await sleep(100);
@@ -265,57 +265,46 @@ async function pasteCheeseGTIN() {
 
     const getRows = () => Array.from(document.querySelectorAll('div[data-test="product.row"]'));
 
-    const waitForRowsCount = async (minCount, timeoutMs = 5000) => {
-        const start = Date.now();
-        while (Date.now() - start < timeoutMs) {
-            if (getRows().length >= minCount) {
-                return true;
-            }
-            await sleep(50);
-        }
-        return false;
-    };
+    const waitForNewRow = (rowsBefore, timeoutMs = 4000) => new Promise(resolve => {
+        let settled = false;
+        const finish = (result) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            observer.disconnect();
+            resolve(result);
+        };
 
-    const waitForRowInputsByIndex = async (rowIndex, timeoutMs = 5000) => {
-        const start = Date.now();
-        while (Date.now() - start < timeoutMs) {
-            const row = getRows()[rowIndex];
-            if (!row) {
-                await sleep(50);
-                continue;
+        const checkRows = () => {
+            const rowsNow = getRows();
+            const newRows = rowsNow.filter(r => !rowsBefore.has(r));
+            if (newRows.length === 1) {
+                finish(newRows[0]);
+            } else if (newRows.length > 1) {
+                finish({ multiple: true });
             }
+        };
 
-            const gtinInput = await waitForInteractiveRowInput(row, gtinSelectors, 250);
-            if (!gtinInput || !gtinInput.name || !gtinInput.name.includes('[compositeProductKey]')) {
-                await sleep(50);
-                continue;
-            }
-
-            const qtyName = gtinInput.name.replace('[compositeProductKey]', '[quantity]');
-            const qtyInput = await waitForInteractiveRowInput(row, [`input[name="${qtyName}"]`], 250);
-            if (!qtyInput) {
-                await sleep(50);
-                continue;
-            }
-
-            return { gtinInput, qtyInput };
-        }
-        return null;
-    };
+        const observer = new MutationObserver(checkRows);
+        observer.observe(rowsContainer, { childList: true, subtree: true });
+        const timer = setTimeout(() => finish(null), timeoutMs);
+        checkRows();
+    });
 
     const addButtonLabel = '\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0442\u043e\u0432\u0430\u0440';
     const items = Object.entries(data);
     for (let index = 0; index < items.length; index += 1) {
         const [gtin, quantity] = items[index];
+        let targetRow = null;
 
         if (index === 0) {
-            const hasFirstRow = await waitForRowsCount(1, 3000);
-            if (!hasFirstRow) {
+            targetRow = getRows()[0] ?? null;
+            if (!targetRow) {
                 console.warn('[DocsAutofill] First row not found. Aborting to avoid overwriting existing data.');
                 break;
             }
         } else {
-            const rowsBeforeCount = getRows().length;
+            const rowsBefore = new Set(getRows());
             const btnAdd = [...document.querySelectorAll('button')]
                 .find(b => b.textContent.trim() === addButtonLabel);
             if (!btnAdd) {
@@ -323,20 +312,29 @@ async function pasteCheeseGTIN() {
                 break;
             }
             btnAdd.click();
-            const hasNewRow = await waitForRowsCount(rowsBeforeCount + 1, 5000);
-            if (!hasNewRow) {
+            targetRow = await waitForNewRow(rowsBefore);
+            if (targetRow && targetRow.multiple) {
+                console.warn('[DocsAutofill] Multiple new rows detected. Aborting to avoid overwriting existing data.');
+                break;
+            }
+            if (!targetRow) {
                 console.warn('[DocsAutofill] New row not found. Aborting to avoid overwriting existing data.');
                 break;
             }
         }
 
-        const targetRowIndex = index === 0 ? 0 : getRows().length - 1;
-        const rowInputs = await waitForRowInputsByIndex(targetRowIndex, 5000);
-        if (!rowInputs) {
-            console.warn('[DocsAutofill] GTIN/quantity inputs not found for row. Aborting to avoid overwriting existing data.');
+        const gtinInput = await waitForInteractiveRowInput(targetRow, gtinSelectors);
+        if (!gtinInput || !gtinInput.name || !gtinInput.name.includes('[compositeProductKey]')) {
+            console.warn('[DocsAutofill] GTIN input not found or name is unexpected. Aborting to avoid overwriting existing data.');
             break;
         }
-        const { qtyInput } = rowInputs;
+
+        const qtyName = gtinInput.name.replace('[compositeProductKey]', '[quantity]');
+        const qtyInput = await waitForInteractiveRowInput(targetRow, [`input[name="${qtyName}"]`]);
+        if (!qtyInput) {
+            console.warn('[DocsAutofill] Quantity input not found for GTIN row. Aborting to avoid overwriting existing data.');
+            break;
+        }
 
         const qtyValue = String(quantity).trim();
         if (!/^\d+$/.test(qtyValue)) {
@@ -344,18 +342,13 @@ async function pasteCheeseGTIN() {
             break;
         }
 
-        const gtinOk = await setGtinValue(async () => {
-            const currentInputs = await waitForRowInputsByIndex(targetRowIndex, 800);
-            return currentInputs?.gtinInput ?? null;
-        }, String(gtin));
+        const gtinOk = await setGtinValue(gtinInput, String(gtin));
         if (!gtinOk) {
             console.warn(`[DocsAutofill] Failed to set GTIN: ${String(gtin)}.`);
             break;
         }
 
-        const rowInputsAfterGtin = await waitForRowInputsByIndex(targetRowIndex, 800);
-        const qtyInputToSet = rowInputsAfterGtin?.qtyInput ?? qtyInput;
-        const qtyOk = await setQuantityValue(qtyInputToSet, qtyValue);
+        const qtyOk = await setQuantityValue(qtyInput, qtyValue);
         if (!qtyOk) {
             console.warn('[DocsAutofill] Quantity was not set as integer. Aborting to avoid overwriting existing data.');
             break;
