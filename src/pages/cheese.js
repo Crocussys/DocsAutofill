@@ -64,24 +64,34 @@ async function pasteCheeseGTIN() {
     const items = Object.entries(data);
     for (let index = 0; index < items.length; ++index) {
         const [gtin, quantity] = items[index];
-        let row = findElements(`osuProducts[${index}][compositeProductKey]`)
-        if (!row.input) {
+        let row = document.querySelector(`input[name="osuProducts[${index}][compositeProductKey]"]`);
+        if (!row) {
             const addButton = Array.from(document.querySelectorAll('button')).filter(button =>
                 button.textContent?.trim() === 'Добавить товар')[0];
             addButton?.click();
             await new Promise(resolve => setTimeout(resolve, 100));
-            row = findElements(`osuProducts[${index}][compositeProductKey]`);
-            if (!row.input) {
+            row = document.querySelector(`input[name="osuProducts[${index}][compositeProductKey]"]`);
+            if (!row) {
                 console.warn(`[DocsAutofill] Failed to find input for product at index ${index}.`);
                 break;
             }
         }
-        const okGTIN = await selectMuiOptionByName(`osuProducts[${index}][compositeProductKey]`, gtin);
-        if (okGTIN){
-            setReactInputValue(document.querySelector(`input[name="osuProducts[${index}][quantity]"]`), quantity);
-        } else {
-            console.warn(`[DocsAutofill] Failed to set GTIN for product at index ${index}.`);
+        setReactInputValue(row, gtin);
+        const listboxId = row.getAttribute('aria-controls');
+        let listbox = listboxId ? document.getElementById(listboxId) : null;
+        if (!listbox) {
+            console.warn(`[DocsAutofill] Failed to find listbox for product at index ${index}.`);
+            break;
         }
+        const options = Array.from(listbox.querySelectorAll('li[role="option"]'));
+        if (options.length === 0) {
+            const option = options[0];
+        } else {
+            console.warn(`[DocsAutofill] No options found in listbox for product at index ${index}.`);
+            break;
+        }
+        option.click();
+        setReactInputValue(document.querySelector(`input[name="osuProducts[${index}][quantity]"]`), quantity);
     }
 }
 
