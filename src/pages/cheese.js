@@ -98,6 +98,11 @@ async function pasteCheeseGTIN() {
         'input[name*="compositeProductKey"]'
     ];
 
+    const qtySelectors = [
+        'input[name*="[quantity]"]',
+        'input[name*="quantity"]'
+    ];
+
     const normalizeIntegerText = (value) => (value ?? '')
         .toString()
         .replace(/\s+/g, '')
@@ -204,11 +209,15 @@ async function pasteCheeseGTIN() {
         return null;
     };
 
-    const waitForInteractiveInputByName = async (name, timeoutMs = 5000) => {
-        const selector = `input[name="${name}"]`;
+    const waitForInteractiveInputByRowIndex = async (rowIndex, selectors, timeoutMs = 5000) => {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
-            const input = document.querySelector(selector);
+            const row = getRows()[rowIndex];
+            if (!row) {
+                await sleep(50);
+                continue;
+            }
+            const input = findRowInput(row, selectors);
             if (input && input.isConnected && !input.disabled && input.getAttribute('aria-disabled') !== 'true' && !input.readOnly) {
                 return input;
             }
@@ -253,7 +262,7 @@ async function pasteCheeseGTIN() {
             input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
             input.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
 
-            const option = await waitForGtinOption(input, gtinValue, 1500);
+            const option = await waitForGtinOption(input, gtinValue, 2500);
             if (option?.multiple) {
                 console.warn('[DocsAutofill] Multiple GTIN options found. Aborting to avoid wrong selection.');
                 return false;
@@ -300,6 +309,60 @@ async function pasteCheeseGTIN() {
         checkRows();
     });
 
+    const isElementVisible = (el) => !!el && el.isConnected && el.getClientRects().length > 0;
+
+    const findAddItemButton = () => {
+        const buttons = Array.from(document.querySelectorAll('button'))
+            .filter(button =>
+                button.textContent?.trim() === addButtonLabel &&
+                button.disabled !== true &&
+                button.getAttribute('aria-disabled') !== 'true' &&
+                isElementVisible(button)
+            );
+        if (buttons.length === 0) {
+            return null;
+        }
+        return buttons[buttons.length - 1];
+    };
+
+    const clickElementReliably = (el) => {
+        if (!el) return;
+        el.scrollIntoView({ block: 'center', inline: 'nearest' });
+        el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+        el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+        el.click();
+    };
+
+    const addRowAndWait = async (maxAttempts = 3) => {
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+            const rowsBefore = new Set(getRows());
+            const rowsBeforeCount = rowsBefore.size;
+            const btnAdd = findAddItemButton();
+            if (!btnAdd) {
+                return null;
+            }
+
+            console.info(`[DocsAutofill] Add item click attempt ${attempt + 1}/${maxAttempts}.`);
+            clickElementReliably(btnAdd);
+            const newRow = await waitForNewRow(rowsBefore, 5000);
+            if (newRow && !newRow.multiple) {
+                console.info('[DocsAutofill] New row detected after add item click.');
+                return newRow;
+            }
+
+            const rowsAfter = getRows();
+            if (rowsAfter.length > rowsBeforeCount) {
+                console.info('[DocsAutofill] New row detected by row count growth.');
+                return rowsAfter[rowsAfter.length - 1];
+            }
+
+            console.warn('[DocsAutofill] Add item click did not create a row yet, retrying.');
+            await sleep(150);
+        }
+        return null;
+    };
+
     const addButtonLabel = '\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0442\u043e\u0432\u0430\u0440';
     const items = Object.entries(data);
     for (let index = 0; index < items.length; index += 1) {
@@ -313,34 +376,27 @@ async function pasteCheeseGTIN() {
                 break;
             }
         } else {
-            const rowsBefore = new Set(getRows());
-            const btnAdd = [...document.querySelectorAll('button')]
-                .find(b => b.textContent.trim() === addButtonLabel);
+            const btnAdd = findAddItemButton();
             if (!btnAdd) {
                 console.warn('[DocsAutofill] Add item button not found. Aborting to avoid overwriting existing data.');
                 break;
             }
-            btnAdd.click();
-            targetRow = await waitForNewRow(rowsBefore);
-            if (targetRow && targetRow.multiple) {
-                console.warn('[DocsAutofill] Multiple new rows detected. Aborting to avoid overwriting existing data.');
-                break;
-            }
+            targetRow = await addRowAndWait(3);
             if (!targetRow) {
                 console.warn('[DocsAutofill] New row not found. Aborting to avoid overwriting existing data.');
                 break;
             }
         }
 
-        const gtinInput = await waitForInteractiveRowInput(targetRow, gtinSelectors);
+        const targetRowIndex = index === 0 ? 0 : getRows().length - 1;
+        const gtinInput = await waitForInteractiveInputByRowIndex(targetRowIndex, gtinSelectors, 2500)
+            || await waitForInteractiveRowInput(targetRow, gtinSelectors);
         if (!gtinInput || !gtinInput.name || !gtinInput.name.includes('[compositeProductKey]')) {
             console.warn('[DocsAutofill] GTIN input not found or name is unexpected. Aborting to avoid overwriting existing data.');
             break;
         }
 
-        const gtinName = gtinInput.name;
-        const qtyName = gtinName.replace('[compositeProductKey]', '[quantity]');
-        const qtyInput = await waitForInteractiveInputByName(qtyName, 2000);
+        const qtyInput = await waitForInteractiveInputByRowIndex(targetRowIndex, qtySelectors, 2500);
         if (!qtyInput) {
             console.warn('[DocsAutofill] Quantity input not found for GTIN row. Aborting to avoid overwriting existing data.');
             break;
@@ -353,7 +409,7 @@ async function pasteCheeseGTIN() {
         }
 
         const gtinOk = await setGtinValue(
-            () => waitForInteractiveInputByName(gtinName, 1200),
+            () => waitForInteractiveInputByRowIndex(targetRowIndex, gtinSelectors, 1200),
             String(gtin)
         );
         if (!gtinOk) {
@@ -361,7 +417,7 @@ async function pasteCheeseGTIN() {
             break;
         }
 
-        const qtyInputCurrent = await waitForInteractiveInputByName(qtyName, 1200) || qtyInput;
+        const qtyInputCurrent = await waitForInteractiveInputByRowIndex(targetRowIndex, qtySelectors, 1200) || qtyInput;
         const qtyOk = await setQuantityValue(qtyInputCurrent, qtyValue);
         if (!qtyOk) {
             console.warn(`[DocsAutofill] Quantity was not set: ${qtyValue}. Aborting to avoid overwriting existing data.`);
