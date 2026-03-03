@@ -309,46 +309,15 @@ async function pasteCheeseGTIN() {
     const getRows = () => Array.from(document.querySelectorAll('div[data-test="product.row"]'))
         .filter(isElementVisible);
 
-    const getAllInputsBySelectors = (selectors) => {
-        const seen = new Set();
-        const result = [];
-        selectors.forEach(selector => {
-            document.querySelectorAll(selector).forEach(input => {
-                if (!seen.has(input)) {
-                    seen.add(input);
-                    result.push(input);
-                }
-            });
-        });
-        return result;
-    };
-
-    const getGtinInputIndexByName = (name) => {
-        const m = name?.match(/\[(\d+)\]\[compositeProductKey\]/)
-            || name?.match(/\[(\d+)\]\.compositeProductKey/);
-        return m ? Number(m[1]) : -1;
-    };
-
-    const getGtinInputNames = () => getAllInputsBySelectors(gtinSelectors)
-        .filter(isInteractiveInput)
-        .map(input => input.name)
-        .filter(name => name && name.includes('compositeProductKey'))
-        .filter((name, idx, arr) => arr.indexOf(name) === idx);
-
-    const waitForNewGtinInputName = async (namesBefore, timeoutMs = 5000) => {
+    const waitForVisibleRowsGrowth = async (rowsBeforeCount, timeoutMs = 5000) => {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
-            const namesNow = getGtinInputNames();
-            const newNames = namesNow.filter(name => !namesBefore.has(name));
-            if (newNames.length === 1) {
-                return newNames[0];
-            }
-            if (newNames.length > 1) {
-                return newNames.sort((a, b) => getGtinInputIndexByName(b) - getGtinInputIndexByName(a))[0];
+            if (getRows().length > rowsBeforeCount) {
+                return true;
             }
             await sleep(50);
         }
-        return null;
+        return false;
     };
 
     const waitForNewRow = (rowsBefore, timeoutMs = 4000) => new Promise(resolve => {
@@ -398,7 +367,6 @@ async function pasteCheeseGTIN() {
         for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
             const rowsBefore = new Set(getRows());
             const rowsBeforeCount = rowsBefore.size;
-            const namesBefore = new Set(getGtinInputNames());
             const buttons = findAddItemButtons();
             if (buttons.length === 0) {
                 return null;
@@ -410,24 +378,30 @@ async function pasteCheeseGTIN() {
                 console.info(`[DocsAutofill] Add item click retry ${attempt + 1}/${maxAttempts}, button ${buttonIndex + 1}/${orderedButtons.length}.`);
                 clickElementReliably(btnAdd);
 
-                const newGtinName = await waitForNewGtinInputName(namesBefore, 2000);
-                if (newGtinName) {
-                    console.info('[DocsAutofill] New row detected after add item click.');
-                    return newGtinName;
+                const newRow = await waitForNewRow(rowsBefore, 2000);
+                if (newRow && !newRow.multiple) {
+                    const gtinInput = await waitForInteractiveRowInput(newRow, gtinSelectors, 2000);
+                    if (gtinInput?.name) {
+                        console.info('[DocsAutofill] New visible row detected after add item click.');
+                        return gtinInput.name;
+                    }
                 }
 
-                await waitForNewRow(rowsBefore, 2000);
-                const rowsAfter = getRows();
-                if (rowsAfter.length > rowsBeforeCount) {
-                    const newGtinNameAfterGrowth = await waitForNewGtinInputName(namesBefore, 1200);
-                    if (newGtinNameAfterGrowth) {
-                        console.info('[DocsAutofill] New row detected by row count growth.');
-                        return newGtinNameAfterGrowth;
+                const hasGrowth = await waitForVisibleRowsGrowth(rowsBeforeCount, 3500);
+                if (hasGrowth) {
+                    const rowsAfter = getRows();
+                    const fallbackRow = rowsAfter[rowsAfter.length - 1] ?? null;
+                    if (fallbackRow) {
+                        const gtinInputFallback = await waitForInteractiveRowInput(fallbackRow, gtinSelectors, 2000);
+                        if (gtinInputFallback?.name) {
+                            console.info('[DocsAutofill] New visible row detected by row count growth.');
+                            return gtinInputFallback.name;
+                        }
                     }
                 }
             }
 
-            console.warn('[DocsAutofill] Add item click did not create a row yet, retrying.');
+            console.warn('[DocsAutofill] Add item click did not create a visible row yet, retrying.');
             await sleep(150);
         }
         return null;
