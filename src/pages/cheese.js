@@ -204,6 +204,19 @@ async function pasteCheeseGTIN() {
         return null;
     };
 
+    const waitForInteractiveInputByName = async (name, timeoutMs = 5000) => {
+        const selector = `input[name="${name}"]`;
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+            const input = document.querySelector(selector);
+            if (input && input.isConnected && !input.disabled && input.getAttribute('aria-disabled') !== 'true' && !input.readOnly) {
+                return input;
+            }
+            await sleep(50);
+        }
+        return null;
+    };
+
     const waitForGtinOption = async (input, gtin, timeoutMs = 6000) => {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
@@ -216,11 +229,15 @@ async function pasteCheeseGTIN() {
         return null;
     };
 
-    const setGtinValue = async (input, value) => {
+    const setGtinValue = async (inputOrGetter, value) => {
         const gtinValue = String(value).trim();
         for (let attempt = 0; attempt < 6; attempt += 1) {
+            const input = typeof inputOrGetter === 'function'
+                ? await inputOrGetter()
+                : inputOrGetter;
             if (!input || !input.isConnected) {
-                return false;
+                await sleep(100);
+                continue;
             }
             if (input.disabled || input.getAttribute('aria-disabled') === 'true' || input.readOnly) {
                 await sleep(100);
@@ -321,8 +338,9 @@ async function pasteCheeseGTIN() {
             break;
         }
 
-        const qtyName = gtinInput.name.replace('[compositeProductKey]', '[quantity]');
-        const qtyInput = await waitForInteractiveRowInput(targetRow, [`input[name="${qtyName}"]`]);
+        const gtinName = gtinInput.name;
+        const qtyName = gtinName.replace('[compositeProductKey]', '[quantity]');
+        const qtyInput = await waitForInteractiveInputByName(qtyName, 2000);
         if (!qtyInput) {
             console.warn('[DocsAutofill] Quantity input not found for GTIN row. Aborting to avoid overwriting existing data.');
             break;
@@ -334,13 +352,16 @@ async function pasteCheeseGTIN() {
             break;
         }
 
-        const gtinOk = await setGtinValue(gtinInput, String(gtin));
+        const gtinOk = await setGtinValue(
+            () => waitForInteractiveInputByName(gtinName, 1200),
+            String(gtin)
+        );
         if (!gtinOk) {
             console.warn(`[DocsAutofill] Failed to set GTIN: ${String(gtin)}.`);
             break;
         }
 
-        const qtyInputCurrent = await waitForInteractiveRowInput(targetRow, [`input[name="${qtyName}"]`], 1200) || qtyInput;
+        const qtyInputCurrent = await waitForInteractiveInputByName(qtyName, 1200) || qtyInput;
         const qtyOk = await setQuantityValue(qtyInputCurrent, qtyValue);
         if (!qtyOk) {
             console.warn(`[DocsAutofill] Quantity was not set: ${qtyValue}. Aborting to avoid overwriting existing data.`);
