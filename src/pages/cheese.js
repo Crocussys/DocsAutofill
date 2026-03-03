@@ -98,11 +98,25 @@ async function pasteCheeseGTIN() {
         'input[name*="compositeProductKey"]'
     ];
 
-    const waitForExactValue = async (input, expected, timeoutMs = 500) => {
-        const expectedStr = String(expected);
+    const normalizeIntegerText = (value) => (value ?? '')
+        .toString()
+        .replace(/\s+/g, '')
+        .trim();
+
+    const parseQuantityInteger = (value) => {
+        const normalized = normalizeIntegerText(value);
+        if (!/^\d+$/.test(normalized)) {
+            return null;
+        }
+        const parsed = Number(normalized);
+        return Number.isFinite(parsed) ? parsed : null;
+    };
+
+    const waitForQuantityValue = async (input, expectedInt, timeoutMs = 1200) => {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
-            if ((input?.value ?? '') === expectedStr) {
+            const currentInt = parseQuantityInteger(input?.value);
+            if (currentInt !== null && currentInt === expectedInt) {
                 return true;
             }
             await sleep(50);
@@ -121,18 +135,19 @@ async function pasteCheeseGTIN() {
 
     const setQuantityValue = async (input, value) => {
         const qtyValue = String(value).trim();
-        if (!/^\d+$/.test(qtyValue)) {
+        const expectedInt = parseQuantityInteger(qtyValue);
+        if (expectedInt === null) {
+            return false;
+        }
+        if (!input || !input.isConnected || input.disabled || input.readOnly) {
             return false;
         }
         input.focus();
         setInputValueNoBlur(input, '');
         setInputValueNoBlur(input, qtyValue);
-        const ok = await waitForExactValue(input, qtyValue, 800);
-        if (!ok) {
-            return false;
-        }
-        await sleep(200);
-        return input.value === qtyValue && /^\d+$/.test(input.value);
+        input.dispatchEvent(new Event('blur', { bubbles: true }));
+        input.blur();
+        return waitForQuantityValue(input, expectedInt, 1200);
     };
 
     const getVisibleListboxes = () => Array.from(document.querySelectorAll('ul[role="listbox"]'))
@@ -149,8 +164,6 @@ async function pasteCheeseGTIN() {
         }
         return getVisibleListboxes();
     };
-
-    const normalizeDigits = (value) => (value ?? '').toString().replace(/\D/g, '');
 
     const optionMatchesGtin = (option, gtin) => {
         const target = String(gtin).trim();
@@ -203,27 +216,8 @@ async function pasteCheeseGTIN() {
         return null;
     };
 
-    const waitForGtinApplied = async (input, targetDigits, timeoutMs = 1200) => {
-        if (!targetDigits) {
-            return false;
-        }
-        const start = Date.now();
-        while (Date.now() - start < timeoutMs) {
-            if (!input || !input.isConnected) {
-                return false;
-            }
-            const currentDigits = normalizeDigits(input.value);
-            if (currentDigits.includes(targetDigits)) {
-                return true;
-            }
-            await sleep(50);
-        }
-        return false;
-    };
-
     const setGtinValue = async (input, value) => {
         const gtinValue = String(value).trim();
-        const targetDigits = normalizeDigits(gtinValue);
         for (let attempt = 0; attempt < 6; attempt += 1) {
             if (!input || !input.isConnected) {
                 return false;
@@ -250,10 +244,8 @@ async function pasteCheeseGTIN() {
             if (option) {
                 option.click();
                 input.dispatchEvent(new Event('change', { bubbles: true }));
-                const applied = await waitForGtinApplied(input, targetDigits);
-                if (applied) {
-                    return true;
-                }
+                await sleep(100);
+                return true;
             }
             input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
             input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Escape', code: 'Escape', bubbles: true }));
@@ -337,7 +329,7 @@ async function pasteCheeseGTIN() {
         }
 
         const qtyValue = String(quantity).trim();
-        if (!/^\d+$/.test(qtyValue)) {
+        if (parseQuantityInteger(qtyValue) === null) {
             console.warn('[DocsAutofill] Quantity is not a valid integer. Aborting to avoid overwriting existing data.');
             break;
         }
@@ -348,9 +340,10 @@ async function pasteCheeseGTIN() {
             break;
         }
 
-        const qtyOk = await setQuantityValue(qtyInput, qtyValue);
+        const qtyInputCurrent = await waitForInteractiveRowInput(targetRow, [`input[name="${qtyName}"]`], 1200) || qtyInput;
+        const qtyOk = await setQuantityValue(qtyInputCurrent, qtyValue);
         if (!qtyOk) {
-            console.warn('[DocsAutofill] Quantity was not set as integer. Aborting to avoid overwriting existing data.');
+            console.warn(`[DocsAutofill] Quantity was not set: ${qtyValue}. Aborting to avoid overwriting existing data.`);
             break;
         }
     }
