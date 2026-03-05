@@ -102,6 +102,29 @@ function findProductRowInputByIndex(rows, index) {
     return rows.find(row => row.name === inputName) ?? null;
 }
 
+function triggerAddItemClick(button) {
+    const rect = button.getBoundingClientRect();
+    const eventInit = {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        button: 0,
+        clientX: rect.left + rect.width / 2,
+        clientY: rect.top + rect.height / 2
+    };
+
+    button.focus();
+    if (typeof PointerEvent === 'function') {
+        button.dispatchEvent(new PointerEvent('pointerdown', eventInit));
+    }
+    button.dispatchEvent(new MouseEvent('mousedown', eventInit));
+    if (typeof PointerEvent === 'function') {
+        button.dispatchEvent(new PointerEvent('pointerup', eventInit));
+    }
+    button.dispatchEvent(new MouseEvent('mouseup', eventInit));
+    button.dispatchEvent(new MouseEvent('click', eventInit));
+}
+
 async function waitForProductRowsCount(minCount, timeoutMs = 7000) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
@@ -145,7 +168,7 @@ async function pasteCheeseGTIN() {
                 break;
             }
             const beforeCount = rows.length;
-            addButton.click();
+            triggerAddItemClick(addButton);
             rows = await waitForProductRowsCount(beforeCount + 1, 7000);
             row = findProductRowInputByIndex(rows, index - skiped);
             if (!row) {
