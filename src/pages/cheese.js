@@ -74,6 +74,18 @@ async function waitForGtinOption(input, timeoutMs = 3000) {
     return null;
 };
 
+async function waitForProductRowInput(index, timeoutMs = 5000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        const row = document.querySelector(`input[name="osuProducts[${index}][compositeProductKey]"]`);
+        if (row) {
+            return row;
+        }
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    return null;
+}
+
 async function pasteCheeseGTIN() {
     const date = new Date();
     const today = `${String(date.getDate()).padStart(2,'0')}.${String(date.getMonth()+1).padStart(2,'0')}.${date.getFullYear()}`;
@@ -94,13 +106,16 @@ async function pasteCheeseGTIN() {
     const items = Object.entries(data);
     for (let index = 0; index < items.length; ++index) {
         const [gtin, quantity] = items[index];
-        let row = document.querySelector(`input[name="osuProducts[${index}][compositeProductKey]"]`);
+        let row = await waitForProductRowInput(index, 200);
         if (!row) {
             const addButton = Array.from(document.querySelectorAll('button')).filter(button =>
                 button.textContent?.trim() === 'Добавить товар')[0];
-            addButton?.click();
-            await new Promise(resolve => setTimeout(resolve, 100));
-            row = document.querySelector(`input[name="osuProducts[${index}][compositeProductKey]"]`);
+            if (!addButton) {
+                console.warn('[DocsAutofill] Add item button not found.');
+                break;
+            }
+            addButton.click();
+            row = await waitForProductRowInput(index, 5000);
             if (!row) {
                 console.warn(`[DocsAutofill] Failed to find input for product at index ${index}.`);
                 break;
@@ -111,7 +126,7 @@ async function pasteCheeseGTIN() {
         row.dispatchEvent(new Event('input', { bubbles: true }));
         row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
         row.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
-        const option = await waitForGtinOption(input);
+        const option = await waitForGtinOption(row);
         if (!option) {
             console.warn('[DocsAutofill] GTIN option not found. Aborting to avoid wrong selection.');
             continue;
@@ -121,7 +136,7 @@ async function pasteCheeseGTIN() {
             continue;
         }
         option.click();
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        row.dispatchEvent(new Event('change', { bubbles: true }));
         setReactInputValue(document.querySelector(`input[name="osuProducts[${index}][quantity]"]`), quantity);
     }
 }
