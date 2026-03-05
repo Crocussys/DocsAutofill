@@ -3,6 +3,8 @@
     return text ? JSON.parse(text) : {};
 }
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 function showStatusMessage(buttonId, durationMs = 1000) {
     const status = document.getElementById(`${buttonId}-status`);
     if (!status) {
@@ -44,7 +46,8 @@ async function copyCheeseGTIN(statusButtonId) {
     }
 }
 
-async function waitForGtinOption(input, timeoutMs = 3000) {
+async function waitForGtinOption(inputName, gtin, timeoutMs = 8000) {
+    const targetValue = String(gtin).trim();
     const findGtinOption = (input) => {
         const listboxId = input.getAttribute('aria-controls') || input.getAttribute('aria-owns');
         let listbox = listboxId ? document.getElementById(listboxId) : null;
@@ -55,6 +58,14 @@ async function waitForGtinOption(input, timeoutMs = 3000) {
             return null;
         }
         const options = Array.from(listbox.querySelectorAll('li[role="option"]'));
+        const exactOption = options.find(option => {
+            const dataValue = option.getAttribute('data-value')?.trim() ?? '';
+            const label = option.textContent?.trim() ?? '';
+            return dataValue === targetValue || label === targetValue;
+        });
+        if (exactOption) {
+            return exactOption;
+        }
         if (options.length === 1) {
             return options[0];
         }
@@ -65,14 +76,44 @@ async function waitForGtinOption(input, timeoutMs = 3000) {
     };
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
+        const input = document.querySelector(`input[name="${inputName}"]`);
+        if (!input) {
+            await sleep(50);
+            continue;
+        }
         const option = findGtinOption(input);
         if (option) {
             return option;
         }
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await sleep(50);
     }
     return null;
 };
+
+async function waitForInputValueByName(inputName, expectedValue, timeoutMs = 3000) {
+    const expected = String(expectedValue).trim();
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        const input = document.querySelector(`input[name="${inputName}"]`);
+        if (input && input.value === expected) {
+            return true;
+        }
+        await sleep(50);
+    }
+    return false;
+}
+
+async function waitForInputByName(inputName, timeoutMs = 3000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        const input = document.querySelector(`input[name="${inputName}"]`);
+        if (input) {
+            return input;
+        }
+        await sleep(50);
+    }
+    return null;
+}
 
 function isProductRowReady(input) {
     if (!input || input.getClientRects().length === 0) {
@@ -97,9 +138,27 @@ function getProductRowInputs(readyOnly = false) {
     return rows.filter(isProductRowReady);
 }
 
-function findProductRowInputByIndex(rows, index) {
+async function waitForProductRowInput(index, timeoutMs = 7000, stableMs = 200) {
     const inputName = `osuProducts[${index}][compositeProductKey]`;
-    return rows.find(row => row.name === inputName) ?? null;
+    const start = Date.now();
+    let candidate = null;
+    let stableSince = 0;
+    while (Date.now() - start < timeoutMs) {
+        const input = document.querySelector(`input[name="${inputName}"]`);
+        if (input && isProductRowReady(input) && input.isConnected) {
+            if (input !== candidate) {
+                candidate = input;
+                stableSince = Date.now();
+            } else if (Date.now() - stableSince >= stableMs) {
+                return input;
+            }
+        } else {
+            candidate = null;
+            stableSince = 0;
+        }
+        await sleep(50);
+    }
+    return null;
 }
 
 function triggerAddItemClick(button) {
@@ -125,16 +184,13 @@ function triggerAddItemClick(button) {
     button.dispatchEvent(new MouseEvent('click', eventInit));
 }
 
-async function waitForProductRowsCount(minCount, timeoutMs = 7000) {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-        const rows = getProductRowInputs(true);
-        if (rows.length >= minCount) {
-            return rows;
-        }
-        await new Promise(resolve => setTimeout(resolve, 50));
+function setInputValueWithoutBlur(input, value) {
+    if (!input) {
+        return;
     }
-    return getProductRowInputs(true);
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 async function pasteCheeseGTIN() {
@@ -155,11 +211,12 @@ async function pasteCheeseGTIN() {
     setReactInputValue(document.querySelector('input[name="sourceDocumentName"]'), 'УПД');
     const data = await getDataFromClipboard();
     const items = Object.entries(data);
-    let rows = getProductRowInputs(true);
     let skiped = 0;
     for (let index = 0; index < items.length; ++index) {
         const [gtin, quantity] = items[index];
-        let row = findProductRowInputByIndex(rows, index - skiped);
+        const targetIndex = index - skiped;
+        const rowName = `osuProducts[${targetIndex}][compositeProductKey]`;
+        let row = await waitForProductRowInput(targetIndex, 500, 150);
         if (!row) {
             const addButton = Array.from(document.querySelectorAll('button')).filter(button =>
                 button.textContent?.trim() === 'Добавить товар')[0];
@@ -167,23 +224,28 @@ async function pasteCheeseGTIN() {
                 console.warn('[DocsAutofill] Add item button not found.');
                 break;
             }
-            const beforeCount = rows.length;
             triggerAddItemClick(addButton);
-            rows = await waitForProductRowsCount(beforeCount + 1, 7000);
-            row = findProductRowInputByIndex(rows, index - skiped);
+            row = await waitForProductRowInput(targetIndex, 7000, 250);
             if (!row) {
                 const allRows = getProductRowInputs(false).map(input => input.name).join(', ');
-                const readyRows = rows.map(input => input.name).join(', ');
-                console.warn(`[DocsAutofill] Failed to find ready input for product at index ${index - skiped}. Ready rows: ${readyRows || 'none'}. All rows: ${allRows || 'none'}.`);
+                const readyRows = getProductRowInputs(true).map(input => input.name).join(', ');
+                console.warn(`[DocsAutofill] Failed to find ready input for product at index ${targetIndex}. Ready rows: ${readyRows || 'none'}. All rows: ${allRows || 'none'}.`);
                 break;
             }
         }
         row.focus();
-        setReactInputValue(row, gtin);
-        row.dispatchEvent(new Event('input', { bubbles: true }));
+        setInputValueWithoutBlur(row, gtin);
         row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
         row.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
-        const option = await waitForGtinOption(row, 5000);
+        let option = await waitForGtinOption(rowName, gtin, 10000);
+        if (!option) {
+            row = await waitForInputByName(rowName, 500);
+            if (row) {
+                row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
+                row.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
+            }
+            option = await waitForGtinOption(rowName, gtin, 5000);
+        }
         if (!option) {
             console.warn('[DocsAutofill] GTIN option not found. Aborting to avoid wrong selection.');
             skiped += 1;
@@ -195,8 +257,22 @@ async function pasteCheeseGTIN() {
             continue;
         }
         option.click();
-        row.dispatchEvent(new Event('change', { bubbles: true }));
-        setReactInputValue(document.querySelector(`input[name="osuProducts[${index - skiped}][quantity]"]`), quantity);
+        row = await waitForInputByName(rowName, 500);
+        row?.dispatchEvent(new Event('change', { bubbles: true }));
+        const committed = await waitForInputValueByName(rowName, gtin, 3000);
+        if (!committed) {
+            console.warn(`[DocsAutofill] GTIN was not committed for row ${rowName}.`);
+            skiped += 1;
+            continue;
+        }
+        const quantityInputName = `osuProducts[${targetIndex}][quantity]`;
+        const quantityInput = await waitForInputByName(quantityInputName, 3000);
+        if (!quantityInput) {
+            console.warn(`[DocsAutofill] Quantity input not found for ${quantityInputName}.`);
+            skiped += 1;
+            continue;
+        }
+        setReactInputValue(quantityInput, quantity);
     }
 }
 
