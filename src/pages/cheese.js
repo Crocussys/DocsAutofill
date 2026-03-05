@@ -1,25 +1,4 @@
-﻿async function getDataFromClipboard() {
-    const text = await navigator.clipboard.readText();
-    return text ? JSON.parse(text) : {};
-}
-
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-function showStatusMessage(buttonId, durationMs = 1000) {
-    const status = document.getElementById(`${buttonId}-status`);
-    if (!status) {
-        return;
-    }
-    status.style.opacity = '1';
-    if (status._hideTimer) {
-        clearTimeout(status._hideTimer);
-    }
-    status._hideTimer = setTimeout(() => {
-        status.style.opacity = '0';
-    }, durationMs);
-}
-
-async function copyCheeseGTIN(statusButtonId) {
+﻿async function copyCheeseGTIN(statusButtonId) {
     let rows = document.querySelectorAll('div[data-test="product.row"]');
     if (!rows || rows.length === 0) {
         rows = document.querySelectorAll('#redesign-portal .DataRow');
@@ -46,151 +25,19 @@ async function copyCheeseGTIN(statusButtonId) {
     }
 }
 
-async function waitForGtinOption(inputName, gtin, timeoutMs = 8000) {
-    const targetValue = String(gtin).trim();
-    const findGtinOption = (input) => {
-        const listboxId = input.getAttribute('aria-controls') || input.getAttribute('aria-owns');
-        let listbox = listboxId ? document.getElementById(listboxId) : null;
-        if (!listbox) {
-            listbox = document.querySelector('ul[role="listbox"]');
-        }
-        if (!listbox) {
-            return null;
-        }
-        const options = Array.from(listbox.querySelectorAll('li[role="option"]'));
-        const exactOption = options.find(option => {
-            const dataValue = option.getAttribute('data-value')?.trim() ?? '';
-            const label = option.textContent?.trim() ?? '';
-            return dataValue === targetValue || label === targetValue;
-        });
-        if (exactOption) {
-            return exactOption;
-        }
-        if (options.length === 1) {
-            return options[0];
-        }
-        if (options.length > 1) {
-            return { multiple: true };
-        }
-        return null;
-    };
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-        const input = document.querySelector(`input[name="${inputName}"]`);
-        if (!input) {
-            await sleep(50);
-            continue;
-        }
-        const option = findGtinOption(input);
-        if (option) {
-            return option;
-        }
-        await sleep(50);
-    }
-    return null;
-};
+const PRODUCT_ROW_NAME_PREFIX = 'osuProducts[';
+const PRODUCT_ROW_NAME_SUFFIX = '][compositeProductKey]';
 
-async function waitForInputValueByName(inputName, expectedValue, timeoutMs = 3000) {
-    const expected = String(expectedValue).trim();
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-        const input = document.querySelector(`input[name="${inputName}"]`);
-        if (input && input.value === expected) {
-            return true;
-        }
-        await sleep(50);
-    }
-    return false;
-}
-
-async function waitForInputByName(inputName, timeoutMs = 3000) {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-        const input = document.querySelector(`input[name="${inputName}"]`);
-        if (input) {
-            return input;
-        }
-        await sleep(50);
-    }
-    return null;
-}
-
-function isProductRowReady(input) {
-    if (!input || input.getClientRects().length === 0) {
-        return false;
-    }
-    const root = input.closest('.MuiFormControl-root') ?? input.parentElement;
-    const combobox = root?.querySelector('[role="combobox"]') ?? null;
-    if (!combobox || combobox.getClientRects().length === 0) {
-        return false;
-    }
-    if (combobox.getAttribute('aria-disabled') === 'true' || combobox.classList.contains('Mui-disabled')) {
-        return false;
-    }
-    return true;
+function getProductRowInputName(index) {
+    return `osuProducts[${index}][compositeProductKey]`;
 }
 
 function getProductRowInputs(readyOnly = false) {
-    const rows = Array.from(document.querySelectorAll('input[name^="osuProducts["][name$="[compositeProductKey]"]'));
-    if (!readyOnly) {
-        return rows;
-    }
-    return rows.filter(isProductRowReady);
+    return getInputsByNamePattern(PRODUCT_ROW_NAME_PREFIX, PRODUCT_ROW_NAME_SUFFIX, readyOnly, isMuiInputReady);
 }
 
 async function waitForProductRowInput(index, timeoutMs = 7000, stableMs = 200) {
-    const inputName = `osuProducts[${index}][compositeProductKey]`;
-    const start = Date.now();
-    let candidate = null;
-    let stableSince = 0;
-    while (Date.now() - start < timeoutMs) {
-        const input = document.querySelector(`input[name="${inputName}"]`);
-        if (input && isProductRowReady(input) && input.isConnected) {
-            if (input !== candidate) {
-                candidate = input;
-                stableSince = Date.now();
-            } else if (Date.now() - stableSince >= stableMs) {
-                return input;
-            }
-        } else {
-            candidate = null;
-            stableSince = 0;
-        }
-        await sleep(50);
-    }
-    return null;
-}
-
-function triggerAddItemClick(button) {
-    const rect = button.getBoundingClientRect();
-    const eventInit = {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-        button: 0,
-        clientX: rect.left + rect.width / 2,
-        clientY: rect.top + rect.height / 2
-    };
-
-    button.focus();
-    if (typeof PointerEvent === 'function') {
-        button.dispatchEvent(new PointerEvent('pointerdown', eventInit));
-    }
-    button.dispatchEvent(new MouseEvent('mousedown', eventInit));
-    if (typeof PointerEvent === 'function') {
-        button.dispatchEvent(new PointerEvent('pointerup', eventInit));
-    }
-    button.dispatchEvent(new MouseEvent('mouseup', eventInit));
-    button.dispatchEvent(new MouseEvent('click', eventInit));
-}
-
-function setInputValueWithoutBlur(input, value) {
-    if (!input) {
-        return;
-    }
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-    setter.call(input, value);
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return waitForStableInputByName(getProductRowInputName(index), timeoutMs, stableMs, isMuiInputReady);
 }
 
 async function pasteCheeseGTIN() {
@@ -209,17 +56,16 @@ async function pasteCheeseGTIN() {
     setReactInputValue(document.querySelector('input[name="sourceDocumentNumber"]'), '1');
     setReactInputValue(document.querySelector('input[name="sourceDocumentDate"]'), today);
     setReactInputValue(document.querySelector('input[name="sourceDocumentName"]'), 'УПД');
-    const data = await getDataFromClipboard();
+    const data = await getDataFromClipboard(text => JSON.parse(text));
     const items = Object.entries(data);
-    let skiped = 0;
+    let skipped = 0;
     for (let index = 0; index < items.length; ++index) {
         const [gtin, quantity] = items[index];
-        const targetIndex = index - skiped;
-        const rowName = `osuProducts[${targetIndex}][compositeProductKey]`;
+        const targetIndex = index - skipped;
+        const rowName = getProductRowInputName(targetIndex);
         let row = await waitForProductRowInput(targetIndex, 500, 150);
         if (!row) {
-            const addButton = Array.from(document.querySelectorAll('button')).filter(button =>
-                button.textContent?.trim() === 'Добавить товар')[0];
+            const addButton = findButtonByText('Добавить товар', true);
             if (!addButton) {
                 console.warn('[DocsAutofill] Add item button not found.');
                 break;
@@ -233,6 +79,7 @@ async function pasteCheeseGTIN() {
                 break;
             }
         }
+        await bringIntoView(row);
         row.focus();
         setInputValueWithoutBlur(row, gtin);
         row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
@@ -248,30 +95,25 @@ async function pasteCheeseGTIN() {
         }
         if (!option) {
             console.warn('[DocsAutofill] GTIN option not found. Aborting to avoid wrong selection.');
-            skiped += 1;
+            skipped += 1;
             continue;
         }
         if (option.multiple) {
             console.warn('[DocsAutofill] Multiple GTIN options found. Aborting to avoid wrong selection.');
-            skiped += 1;
+            skipped += 1;
             continue;
         }
         option.click();
         row = await waitForInputByName(rowName, 500);
         row?.dispatchEvent(new Event('change', { bubbles: true }));
-        const committed = await waitForInputValueByName(rowName, gtin, 3000);
-        if (!committed) {
-            console.warn(`[DocsAutofill] GTIN was not committed for row ${rowName}.`);
-            skiped += 1;
-            continue;
-        }
         const quantityInputName = `osuProducts[${targetIndex}][quantity]`;
         const quantityInput = await waitForInputByName(quantityInputName, 3000);
         if (!quantityInput) {
             console.warn(`[DocsAutofill] Quantity input not found for ${quantityInputName}.`);
-            skiped += 1;
+            skipped += 1;
             continue;
         }
+        await bringIntoView(quantityInput);
         setReactInputValue(quantityInput, quantity);
     }
 }
@@ -313,29 +155,6 @@ function init() {
             insertAfter: false
         }
     };
-    const placeButton = (container, element, insertAfter) => {
-        if (!insertAfter) {
-            if (element.parentElement !== container) {
-                container.appendChild(element);
-            }
-            return;
-        }
-        const children = Array.from(container.children);
-        if (children.length === 0) {
-            if (element.parentElement !== container) {
-                container.appendChild(element);
-            }
-            return;
-        }
-        const firstNonElement = children.find(child => child !== element);
-        if (!firstNonElement) {
-            return;
-        }
-        if (firstNonElement.nextElementSibling !== element) {
-            firstNonElement.insertAdjacentElement('afterend', element);
-        }
-    };
-
     const observer = new MutationObserver(() => {
         const path = normalizePath(window.location.pathname);
         Object.entries(BUTTONS).forEach(([key, cfg]) => {

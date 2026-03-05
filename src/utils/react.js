@@ -1,3 +1,5 @@
+const reactSleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 function setReactInputValue(input, value) {
     if (!input) return;
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
@@ -7,11 +9,133 @@ function setReactInputValue(input, value) {
     );
 }
 
+function setInputValueWithoutBlur(input, value) {
+    if (!input) {
+        return;
+    }
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+    setter.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+async function waitForInputByName(inputName, timeoutMs = 3000) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        const input = document.querySelector(`input[name="${inputName}"]`);
+        if (input) {
+            return input;
+        }
+        await reactSleep(50);
+    }
+    return null;
+}
+
+async function bringIntoView(element, delayMs = 80) {
+    if (!element) {
+        return;
+    }
+    element.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'auto' });
+    await reactSleep(delayMs);
+}
+
+function isMuiInputReady(input) {
+    if (!input || input.getClientRects().length === 0) {
+        return false;
+    }
+    const root = input.closest('.MuiFormControl-root') ?? input.parentElement;
+    const combobox = root?.querySelector('[role="combobox"]') ?? null;
+    if (!combobox || combobox.getClientRects().length === 0) {
+        return false;
+    }
+    if (combobox.getAttribute('aria-disabled') === 'true' || combobox.classList.contains('Mui-disabled')) {
+        return false;
+    }
+    return true;
+}
+
+function getInputsByNamePattern(namePrefix, nameSuffix, readyOnly = false, readyCheck = isMuiInputReady) {
+    const rows = Array.from(document.querySelectorAll(`input[name^="${namePrefix}"][name$="${nameSuffix}"]`));
+    if (!readyOnly) {
+        return rows;
+    }
+    return rows.filter(readyCheck);
+}
+
+async function waitForStableInputByName(inputName, timeoutMs = 7000, stableMs = 200, readyCheck = isMuiInputReady) {
+    const start = Date.now();
+    let candidate = null;
+    let stableSince = 0;
+    while (Date.now() - start < timeoutMs) {
+        const input = document.querySelector(`input[name="${inputName}"]`);
+        if (input && readyCheck(input) && input.isConnected) {
+            if (input !== candidate) {
+                candidate = input;
+                stableSince = Date.now();
+            } else if (Date.now() - stableSince >= stableMs) {
+                return input;
+            }
+        } else {
+            candidate = null;
+            stableSince = 0;
+        }
+        await reactSleep(50);
+    }
+    return null;
+}
+
+async function waitForAutocompleteOptionByValue(inputName, value, timeoutMs = 8000) {
+    const targetValue = String(value).trim();
+    const findOption = (input) => {
+        const listboxId = input.getAttribute('aria-controls') || input.getAttribute('aria-owns');
+        let listbox = listboxId ? document.getElementById(listboxId) : null;
+        if (!listbox) {
+            listbox = document.querySelector('ul[role="listbox"]');
+        }
+        if (!listbox) {
+            return null;
+        }
+        const options = Array.from(listbox.querySelectorAll('li[role="option"]'));
+        const exactOption = options.find(option => {
+            const dataValue = option.getAttribute('data-value')?.trim() ?? '';
+            const label = option.textContent?.trim() ?? '';
+            return dataValue === targetValue || label === targetValue;
+        });
+        if (exactOption) {
+            return exactOption;
+        }
+        if (options.length === 1) {
+            return options[0];
+        }
+        if (options.length > 1) {
+            return { multiple: true };
+        }
+        return null;
+    };
+
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        const input = document.querySelector(`input[name="${inputName}"]`);
+        if (!input) {
+            await reactSleep(50);
+            continue;
+        }
+        const option = findOption(input);
+        if (option) {
+            return option;
+        }
+        await reactSleep(50);
+    }
+    return null;
+}
+
+async function waitForGtinOption(inputName, gtin, timeoutMs = 8000) {
+    return waitForAutocompleteOptionByValue(inputName, gtin, timeoutMs);
+}
+
 async function selectMuiOptionByName(inputName, value) {
     const maxAttempts = 60;
     const delayMs = 50;
     const targetValue = String(value);
-    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
     const findElements = () => {
         const input = document.querySelector(`input[name="${inputName}"]`);
@@ -27,11 +151,11 @@ async function selectMuiOptionByName(inputName, value) {
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const { input, combobox, labelId } = findElements();
         if (!input || !combobox) {
-            await sleep(delayMs);
+            await reactSleep(delayMs);
             continue;
         }
         if (combobox.getAttribute('aria-disabled') === 'true' || combobox.classList.contains('Mui-disabled')) {
-            await sleep(delayMs);
+            await reactSleep(delayMs);
             continue;
         }
 
@@ -48,17 +172,17 @@ async function selectMuiOptionByName(inputName, value) {
                 listbox = listboxes.find(ul => ul.querySelector(`li[role="option"][data-value="${targetValue}"]`)) || null;
             }
             if (listbox) break;
-            await sleep(delayMs);
+            await reactSleep(delayMs);
         }
 
         if (!listbox) {
-            await sleep(delayMs);
+            await reactSleep(delayMs);
             continue;
         }
 
         const option = listbox.querySelector(`li[role="option"][data-value="${targetValue}"]`);
         if (!option) {
-            await sleep(delayMs);
+            await reactSleep(delayMs);
             continue;
         }
         option.click();
@@ -68,7 +192,7 @@ async function selectMuiOptionByName(inputName, value) {
             if (current?.value === targetValue) {
                 return true;
             }
-            await sleep(delayMs);
+            await reactSleep(delayMs);
         }
     }
 

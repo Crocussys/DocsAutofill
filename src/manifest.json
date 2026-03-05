@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DocsAutofill",
-  "version": "2.0.36.2",
+  "version": "2.0.37",
   "description": "Автоматическое заполнение документов для честного знака",
   "permissions": ["clipboardRead"],
   "content_scripts": [
@@ -13,6 +13,8 @@
         "utils/init_message.js",
         "libs/xlsx.full.min.js",
         "utils/react.js",
+        "utils/clipboard.js",
+        "utils/buttons.js",
         "pages/beer.js"
       ],
       "all_frames": true,
@@ -25,6 +27,7 @@
       "js": [
         "utils/init_message.js",
         "utils/react.js",
+        "utils/clipboard.js",
         "utils/buttons.js",
         "pages/cheese.js"
       ],
