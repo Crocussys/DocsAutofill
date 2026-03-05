@@ -74,8 +74,27 @@ async function waitForGtinOption(input, timeoutMs = 3000) {
     return null;
 };
 
-function getProductRowInputs() {
-    return Array.from(document.querySelectorAll('input[name^="osuProducts["][name$="[compositeProductKey]"]'));
+function isProductRowReady(input) {
+    if (!input || input.getClientRects().length === 0) {
+        return false;
+    }
+    const root = input.closest('.MuiFormControl-root') ?? input.parentElement;
+    const combobox = root?.querySelector('[role="combobox"]') ?? null;
+    if (!combobox || combobox.getClientRects().length === 0) {
+        return false;
+    }
+    if (combobox.getAttribute('aria-disabled') === 'true' || combobox.classList.contains('Mui-disabled')) {
+        return false;
+    }
+    return true;
+}
+
+function getProductRowInputs(readyOnly = false) {
+    const rows = Array.from(document.querySelectorAll('input[name^="osuProducts["][name$="[compositeProductKey]"]'));
+    if (!readyOnly) {
+        return rows;
+    }
+    return rows.filter(isProductRowReady);
 }
 
 function findProductRowInputByIndex(rows, index) {
@@ -86,13 +105,13 @@ function findProductRowInputByIndex(rows, index) {
 async function waitForProductRowsCount(minCount, timeoutMs = 7000) {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
-        const rows = getProductRowInputs();
+        const rows = getProductRowInputs(true);
         if (rows.length >= minCount) {
             return rows;
         }
         await new Promise(resolve => setTimeout(resolve, 50));
     }
-    return getProductRowInputs();
+    return getProductRowInputs(true);
 }
 
 async function pasteCheeseGTIN() {
@@ -113,10 +132,11 @@ async function pasteCheeseGTIN() {
     setReactInputValue(document.querySelector('input[name="sourceDocumentName"]'), 'УПД');
     const data = await getDataFromClipboard();
     const items = Object.entries(data);
-    let rows = getProductRowInputs();
+    let rows = getProductRowInputs(true);
+    let skiped = 0;
     for (let index = 0; index < items.length; ++index) {
         const [gtin, quantity] = items[index];
-        let row = findProductRowInputByIndex(rows, index);
+        let row = findProductRowInputByIndex(rows, index - skiped);
         if (!row) {
             const addButton = Array.from(document.querySelectorAll('button')).filter(button =>
                 button.textContent?.trim() === 'Добавить товар')[0];
@@ -127,10 +147,11 @@ async function pasteCheeseGTIN() {
             const beforeCount = rows.length;
             addButton.click();
             rows = await waitForProductRowsCount(beforeCount + 1, 7000);
-            row = findProductRowInputByIndex(rows, index);
+            row = findProductRowInputByIndex(rows, index - skiped);
             if (!row) {
-                const availableRows = rows.map(input => input.name).join(', ');
-                console.warn(`[DocsAutofill] Failed to find input for product at index ${index}. Existing rows: ${availableRows || 'none'}.`);
+                const allRows = getProductRowInputs(false).map(input => input.name).join(', ');
+                const readyRows = rows.map(input => input.name).join(', ');
+                console.warn(`[DocsAutofill] Failed to find ready input for product at index ${index - skiped}. Ready rows: ${readyRows || 'none'}. All rows: ${allRows || 'none'}.`);
                 break;
             }
         }
@@ -142,15 +163,17 @@ async function pasteCheeseGTIN() {
         const option = await waitForGtinOption(row, 5000);
         if (!option) {
             console.warn('[DocsAutofill] GTIN option not found. Aborting to avoid wrong selection.');
+            skiped += 1;
             continue;
         }
         if (option.multiple) {
             console.warn('[DocsAutofill] Multiple GTIN options found. Aborting to avoid wrong selection.');
+            skiped += 1;
             continue;
         }
         option.click();
         row.dispatchEvent(new Event('change', { bubbles: true }));
-        setReactInputValue(document.querySelector(`input[name="osuProducts[${index}][quantity]"]`), quantity);
+        setReactInputValue(document.querySelector(`input[name="osuProducts[${index - skiped}][quantity]"]`), quantity);
     }
 }
 
