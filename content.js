@@ -106,7 +106,7 @@ function getFillDatesButton() {
 }
 
 function addButton(btn) {
-    const inscription = Array.from(document.querySelectorAll('h3')).filter(h => h.innerText === 'Список кодов');
+    const inscription = Array.from(document.querySelectorAll('h3')).find(h => h.innerText === 'Список кодов');
     const container = inscription.parentElement.querySelector('.MuiStack-root');
     const otherButton = container.getElementsByTagName('button')[0];
     if (!otherButton) {
