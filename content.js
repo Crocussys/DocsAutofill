@@ -106,13 +106,12 @@ function getFillDatesButton() {
 }
 
 function addButton(btn) {
-    const inscription = Array.from(document.querySelectorAll('h3')).filter(h => h.innerText === 'Список кодов');
-    const container = inscription.parentElement.querySelector('.MuiStack-root');
+    const autocompleteRoot = document.querySelector('div.MuiAutocomplete-root[productgroupids="15"][documenttypecode="231"]');
+    if (!autocompleteRoot || document.getElementById(btn.id)) return;
+
+    const container = autocompleteRoot.parentElement.parentElement;
     const otherButton = container.getElementsByTagName('button')[0];
-    if (!otherButton) {
-        console.warn('[DateAutofill] Кнопки не найдены')
-        return;
-    }
+    if (!otherButton) return;
 
     container.appendChild(btn);
 
