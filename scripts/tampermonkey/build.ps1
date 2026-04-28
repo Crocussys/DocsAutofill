@@ -1,15 +1,23 @@
 param(
-    [string]$OutputDir = (Join-Path $PSScriptRoot "dist")
+    [string]$SourceDir = (Join-Path $PSScriptRoot "..\..\src"),
+    [string]$OutputDir = (Join-Path $PSScriptRoot "dist"),
+    [string]$Version = ""
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$srcDir = (Resolve-Path (Join-Path $repoRoot "src")).Path
+$srcDir = (Resolve-Path -LiteralPath $SourceDir).Path
 $manifestPath = Join-Path $srcDir "manifest.json"
-$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-$version = $manifest.version
+$scriptVersion = $Version
+
+if (-not $scriptVersion) {
+    if (-not (Test-Path -LiteralPath $manifestPath)) {
+        throw "manifest.json not found in SourceDir: $srcDir"
+    }
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $scriptVersion = $manifest.version
+}
 
 if (-not (Test-Path -LiteralPath $OutputDir)) {
     New-Item -ItemType Directory -Path $OutputDir | Out-Null
@@ -43,7 +51,7 @@ function Build-UserScript {
         "// ==UserScript=="
         "// @name         $Name"
         "// @namespace    https://tampermonkey.net/"
-        "// @version      $version"
+        "// @version      $scriptVersion"
         "// @description  $Description"
         "// @author       DocsAutofill"
     )

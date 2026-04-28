@@ -24,18 +24,42 @@ or:
 scripts\tampermonkey\build.bat
 ```
 
+or:
+
+```bash
+bash scripts/tampermonkey/build.sh
+```
+
 Output directory:
 
 `scripts/tampermonkey/dist`
+
+You can also point build to any copied source directory:
+
+```powershell
+.\scripts\tampermonkey\build.ps1 -SourceDir "C:\Path\DocsAutofill" -OutputDir "C:\Path\DocsAutofill\tampers"
+```
+
+```bash
+bash scripts/tampermonkey/build.sh --source-dir "/path/DocsAutofill" --output-dir "/path/DocsAutofill/tampers"
+```
+
+## Install Flow
+
+`scripts/install.bat` and `scripts/install.sh` now do all steps automatically:
+
+1. Copy `src/*` into the target DocsAutofill folder.
+2. Create `tampers` inside that target folder.
+3. Build `docsautofill-*.user.js` in `tampers` with `@require` paths pointing to the installed files.
 
 ## Install into Tampermonkey
 
 1. Open `chrome://extensions`.
 2. Enable `Allow access to file URLs` for Tampermonkey.
 3. Open Tampermonkey Dashboard and select `Utilities -> Import from file`.
-4. Import both files from `scripts/tampermonkey/dist`.
+4. Import both files from the target `tampers` folder created by install.
 
 ## Notes
 
-- Re-run the build after any changes in `src/`.
-- Re-run the build if the repository path changes, because `file:///` paths are absolute.
+- Re-run install (or build with `--source-dir`) after any changes in `src/`.
+- If target path changes, rebuild userscripts because `file:///` paths are absolute.
