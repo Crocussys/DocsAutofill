@@ -149,7 +149,7 @@ function init() {
             id: 'docsautofill-template-button',
             text: 'Шаблон',
             onClick: pasteTemplate,
-            size: { width: '150px', height: '40px' },
+            size: { width: '110px', height: '40px' },
             marginLeft: '24px',
             marginTop: '0px',
             getContainer: () => {
