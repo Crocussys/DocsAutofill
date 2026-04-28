@@ -9,7 +9,7 @@
     }
     const gtins = {};
     rows.forEach(row => {
-        if (row.querySelector('[data-column="name"]')?.innerText.startsWith('Сыр')) {
+        if (row.querySelector('[data-column="name"]')?.innerText.toLowerCase().startsWith('сыр')) {
             gtins[row.querySelector('[data-column="gtin"] a')?.innerText] = Number(row.querySelector('[data-column="quantity"]')?.innerText.replace(',', '.').match(/\d+(\.\d+)?/)?.[0])
         }
     });
