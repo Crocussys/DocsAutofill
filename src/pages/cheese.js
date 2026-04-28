@@ -40,7 +40,7 @@ async function waitForProductRowInput(index, timeoutMs = 7000, stableMs = 200) {
     return waitForStableInputByName(getProductRowInputName(index), timeoutMs, stableMs, isMuiInputReady);
 }
 
-async function pasteCheeseGTIN() {
+async function pasteTemplate() {
     const date = new Date();
     const today = `${String(date.getDate()).padStart(2,'0')}.${String(date.getMonth()+1).padStart(2,'0')}.${date.getFullYear()}`;
     const okDocumentType = await selectMuiOptionByName('documentType', '219');
@@ -56,6 +56,9 @@ async function pasteCheeseGTIN() {
     setReactInputValue(document.querySelector('input[name="sourceDocumentNumber"]'), '1');
     setReactInputValue(document.querySelector('input[name="sourceDocumentDate"]'), today);
     setReactInputValue(document.querySelector('input[name="sourceDocumentName"]'), 'УПД');
+}
+
+async function pasteCheeseGTIN() {
     const data = await getDataFromClipboard(text => JSON.parse(text));
     const items = Object.entries(data);
     let skipped = 0;
@@ -126,8 +129,9 @@ function init() {
         return path;
     };
 
-    const BUTTONS = {
-        '/warehouse': {
+    const BUTTONS = [
+        {
+            path: '/warehouse',
             id: 'docsautofill-copy-cheese',
             text: 'Копировать сыры',
             onClick: () => copyCheeseGTIN('docsautofill-copy-cheese'),
@@ -140,10 +144,11 @@ function init() {
             },
             insertAfter: true
         },
-        '/requests/withdrawing/create': {
-            id: 'custom-header-button',
-            text: 'Вставить сыры',
-            onClick: pasteCheeseGTIN,
+        {
+            path: '/requests/withdrawing/create',
+            id: 'docsautofill-template-button',
+            text: 'Шаблон',
+            onClick: pasteTemplate,
             size: { width: '150px', height: '40px' },
             marginLeft: '24px',
             marginTop: '0px',
@@ -153,12 +158,29 @@ function init() {
                 return header || document.querySelector('#WindowHeader div.FormLayout-FormHeaderSection');
             },
             insertAfter: false
+        },
+        {
+            path: '/requests/withdrawing/create',
+            id: 'docsautofill-paste-cheese-button',
+            text: 'Вставить сыры',
+            onClick: pasteCheeseGTIN,
+            size: { width: '150px', height: '40px' },
+            marginLeft: '0px',
+            marginTop: '8px',
+            getContainer: () => {
+                const title = Array.from(document.querySelectorAll('h4'))
+                    .find(el => (el.textContent ?? '').trim().includes('Список товаров'));
+                return title?.parentElement?.parentElement ?? null;
+            },
+            insertAfter: true
         }
-    };
+    ];
+
     const observer = new MutationObserver(() => {
         const path = normalizePath(window.location.pathname);
-        Object.entries(BUTTONS).forEach(([key, cfg]) => {
-            if (normalizePath(key) !== path) {
+
+        BUTTONS.forEach((cfg) => {
+            if (normalizePath(cfg.path) !== path) {
                 const wrapper = document.getElementById(`${cfg.id}-wrapper`);
                 if (wrapper) {
                     wrapper.remove();
@@ -170,53 +192,51 @@ function init() {
             }
         });
 
-        const config = BUTTONS[path];
-        if (!config) {
-            return;
-        }
-        const container = config.getContainer();
-        if (!container) {
-            return;
-        }
-        const wrapperId = `${config.id}-wrapper`;
-        let wrapper = document.getElementById(wrapperId);
-        if (!wrapper) {
-            wrapper = document.createElement('div');
-            wrapper.id = wrapperId;
-            wrapper.style.display = 'inline-flex';
-            wrapper.style.alignItems = 'center';
-            wrapper.style.gap = '8px';
-        }
-        let button = document.getElementById(config.id);
-        if (!button) {
-            button = createButton(config.onClick, config.text, config.size);
-            button.id = config.id;
-        }
-        if (button.parentElement !== wrapper) {
-            wrapper.appendChild(button);
-        }
-        if (config.statusText) {
-            const statusId = `${config.id}-status`;
-            let status = document.getElementById(statusId);
-            if (!status) {
-                status = document.createElement('span');
-                status.id = statusId;
-                status.textContent = config.statusText;
-                status.style.opacity = '0';
-                status.style.transition = 'opacity 0.3s ease';
-                status.style.color = '#2e7d32';
-                status.style.fontSize = '14px';
-                status.style.marginLeft = '8px';
-                status.style.pointerEvents = 'none';
-                status.style.userSelect = 'none';
+        BUTTONS.filter(cfg => normalizePath(cfg.path) === path).forEach((config) => {
+            const container = config.getContainer();
+            if (!container) {
+                return;
             }
-            if (status.parentElement !== wrapper) {
-                wrapper.appendChild(status);
+            const wrapperId = `${config.id}-wrapper`;
+            let wrapper = document.getElementById(wrapperId);
+            if (!wrapper) {
+                wrapper = document.createElement('div');
+                wrapper.id = wrapperId;
+                wrapper.style.display = 'inline-flex';
+                wrapper.style.alignItems = 'center';
+                wrapper.style.gap = '8px';
             }
-        }
-        wrapper.style.marginLeft = config.marginLeft ?? '24px';
-        wrapper.style.marginTop = config.marginTop ?? '24px';
-        placeButton(container, wrapper, config.insertAfter);
+            let button = document.getElementById(config.id);
+            if (!button) {
+                button = createButton(config.onClick, config.text, config.size);
+                button.id = config.id;
+            }
+            if (button.parentElement !== wrapper) {
+                wrapper.appendChild(button);
+            }
+            if (config.statusText) {
+                const statusId = `${config.id}-status`;
+                let status = document.getElementById(statusId);
+                if (!status) {
+                    status = document.createElement('span');
+                    status.id = statusId;
+                    status.textContent = config.statusText;
+                    status.style.opacity = '0';
+                    status.style.transition = 'opacity 0.3s ease';
+                    status.style.color = '#2e7d32';
+                    status.style.fontSize = '14px';
+                    status.style.marginLeft = '8px';
+                    status.style.pointerEvents = 'none';
+                    status.style.userSelect = 'none';
+                }
+                if (status.parentElement !== wrapper) {
+                    wrapper.appendChild(status);
+                }
+            }
+            wrapper.style.marginLeft = config.marginLeft ?? '24px';
+            wrapper.style.marginTop = config.marginTop ?? '24px';
+            placeButton(container, wrapper, config.insertAfter);
+        });
     });
 
     observer.observe(document.body, {
