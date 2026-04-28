@@ -40,6 +40,18 @@ async function waitForProductRowInput(index, timeoutMs = 7000, stableMs = 200) {
     return waitForStableInputByName(getProductRowInputName(index), timeoutMs, stableMs, isMuiInputReady);
 }
 
+async function waitForDisabledInputByName(inputName, timeoutMs = 5000, pollMs = 50) {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        const input = document.querySelector(`input[name="${inputName}"]`);
+        if (input && input.disabled) {
+            return input;
+        }
+        await new Promise(resolve => setTimeout(resolve, pollMs));
+    }
+    return null;
+}
+
 async function pasteTemplate() {
     const date = new Date();
     const today = `${String(date.getDate()).padStart(2,'0')}.${String(date.getMonth()+1).padStart(2,'0')}.${date.getFullYear()}`;
@@ -109,6 +121,15 @@ async function pasteCheeseGTIN() {
         option.click();
         row = await waitForInputByName(rowName, 500);
         row?.dispatchEvent(new Event('change', { bubbles: true }));
+
+        const weightInputName = `osuProducts[${targetIndex}][weight]`;
+        const disabledWeightInput = await waitForDisabledInputByName(weightInputName, 5000);
+        if (!disabledWeightInput) {
+            console.warn(`[DocsAutofill] Weight input did not become disabled for ${weightInputName}.`);
+            skipped += 1;
+            continue;
+        }
+
         const quantityInputName = `osuProducts[${targetIndex}][quantity]`;
         const quantityInput = await waitForInputByName(quantityInputName, 3000);
         if (!quantityInput) {
