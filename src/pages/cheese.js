@@ -7,10 +7,13 @@
         console.warn('[DocsAutofill] GTIN rows not found for copy.');
         return false;
     }
-    const gtins = {};
+    const gtins = [];
     rows.forEach(row => {
         if (row.querySelector('[data-column="name"]')?.innerText.toLowerCase().startsWith('сыр')) {
-            gtins[row.querySelector('[data-column="gtin"] a')?.innerText] = Number(row.querySelector('[data-column="quantity"]')?.innerText.replace(',', '.').match(/\d+(\.\d+)?/)?.[0])
+            gtins.push({
+                "gtin": row.querySelector('[data-column="gtin"] a')?.innerText,
+                "quantity": Number(row.querySelector('[data-column="quantity"]')?.innerText.replace(',', '.').match(/\d+(\.\d+)?/)?.[0])
+            })
         }
     });
     try {
@@ -71,74 +74,193 @@ async function pasteTemplate() {
 }
 
 async function pasteCheeseGTIN() {
-    const data = await getDataFromClipboard(text => JSON.parse(text));
-    const items = Object.entries(data);
+    const MAX_ROW_RETRIES = 3;
+    const rowInputExists = (rowName) => {
+        const input = document.querySelector(`input[name="${rowName}"]`);
+        return Boolean(input && input.isConnected);
+    };
+    const waitForRowOrCreate = async (targetIndex) => {
+        let row = await waitForProductRowInput(targetIndex, 500, 150);
+        if (row) {
+            return row;
+        }
+        const addButton = findButtonByText('Добавить товар', true);
+        if (!addButton) {
+            return null;
+        }
+        triggerAddItemClick(addButton);
+        row = await waitForProductRowInput(targetIndex, 7000, 250);
+        return row;
+    };
+
+    const items = await getDataFromClipboard(text => JSON.parse(text));
     let skipped = 0;
     for (let index = 0; index < items.length; ++index) {
-        const [gtin, quantity] = items[index];
-        const targetIndex = index - skipped;
-        const rowName = getProductRowInputName(targetIndex);
-        let row = await waitForProductRowInput(targetIndex, 500, 150);
-        if (!row) {
-            const addButton = findButtonByText('Добавить товар', true);
-            if (!addButton) {
-                console.warn('[DocsAutofill] Add item button not found.');
-                break;
-            }
-            triggerAddItemClick(addButton);
-            row = await waitForProductRowInput(targetIndex, 7000, 250);
+        const item = items[index];
+        const gtin = item["gtin"];
+        const quantity = item["quantity"];
+        let processed = false;
+        for (let attempt = 1; attempt <= MAX_ROW_RETRIES; attempt += 1) {
+            const targetIndex = index - skipped;
+            const rowName = getProductRowInputName(targetIndex);
+
+            let row = await waitForRowOrCreate(targetIndex);
             if (!row) {
                 const allRows = getProductRowInputs(false).map(input => input.name).join(', ');
                 const readyRows = getProductRowInputs(true).map(input => input.name).join(', ');
                 console.warn(`[DocsAutofill] Failed to find ready input for product at index ${targetIndex}. Ready rows: ${readyRows || 'none'}. All rows: ${allRows || 'none'}.`);
+                if (attempt < MAX_ROW_RETRIES) {
+                    continue;
+                }
+                skipped += 1;
+                processed = true;
                 break;
             }
-        }
-        await bringIntoView(row);
-        row.focus();
-        setInputValueWithoutBlur(row, gtin);
-        row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
-        row.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
-        let option = await waitForGtinOption(rowName, gtin, 10000);
-        if (!option) {
-            row = await waitForInputByName(rowName, 500);
-            if (row) {
+
+            row = await waitForInputByName(rowName, 300);
+            if (!row || !row.isConnected) {
+                if (attempt < MAX_ROW_RETRIES) {
+                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared before GTIN input. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                    continue;
+                }
+                console.warn(`[DocsAutofill] Product row ${rowName} keeps disappearing. Skipping GTIN ${gtin}.`);
+                skipped += 1;
+                processed = true;
+                break;
+            }
+
+            await bringIntoView(row);
+            row.focus();
+            setInputValueWithoutBlur(row, gtin);
+            row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
+            row.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
+
+            if (!rowInputExists(rowName)) {
+                if (attempt < MAX_ROW_RETRIES) {
+                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared after GTIN input. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                    continue;
+                }
+                console.warn(`[DocsAutofill] Product row ${rowName} keeps disappearing. Skipping GTIN ${gtin}.`);
+                skipped += 1;
+                processed = true;
+                break;
+            }
+
+            let option = await waitForGtinOption(rowName, gtin, 10000);
+            if (!option) {
+                row = await waitForInputByName(rowName, 500);
+                if (!row || !row.isConnected) {
+                    if (attempt < MAX_ROW_RETRIES) {
+                        console.warn(`[DocsAutofill] Product row ${rowName} disappeared while opening GTIN options. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                        continue;
+                    }
+                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared while opening GTIN options. Skipping GTIN ${gtin}.`);
+                    skipped += 1;
+                    processed = true;
+                    break;
+                }
                 row.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
                 row.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', code: 'ArrowDown', bubbles: true }));
+                option = await waitForGtinOption(rowName, gtin, 5000);
             }
-            option = await waitForGtinOption(rowName, gtin, 5000);
-        }
-        if (!option) {
-            console.warn('[DocsAutofill] GTIN option not found. Aborting to avoid wrong selection.');
-            skipped += 1;
-            continue;
-        }
-        if (option.multiple) {
-            console.warn('[DocsAutofill] Multiple GTIN options found. Aborting to avoid wrong selection.');
-            skipped += 1;
-            continue;
-        }
-        option.click();
-        row = await waitForInputByName(rowName, 500);
-        row?.dispatchEvent(new Event('change', { bubbles: true }));
 
-        const weightInputName = `osuProducts[${targetIndex}][weight]`;
-        const disabledWeightInput = await waitForDisabledInputByName(weightInputName, 5000);
-        if (!disabledWeightInput) {
-            console.warn(`[DocsAutofill] Weight input did not become disabled for ${weightInputName}.`);
-            skipped += 1;
-            continue;
+            if (!option) {
+                if (!rowInputExists(rowName)) {
+                    if (attempt < MAX_ROW_RETRIES) {
+                        console.warn(`[DocsAutofill] Product row ${rowName} disappeared before option select. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                        continue;
+                    }
+                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared before option select. Skipping GTIN ${gtin}.`);
+                    skipped += 1;
+                    processed = true;
+                    break;
+                }
+                console.warn('[DocsAutofill] GTIN option not found. Aborting to avoid wrong selection.');
+                skipped += 1;
+                processed = true;
+                break;
+            }
+
+            if (option.multiple) {
+                console.warn('[DocsAutofill] Multiple GTIN options found. Aborting to avoid wrong selection.');
+                skipped += 1;
+                processed = true;
+                break;
+            }
+
+            option.click();
+            row = await waitForInputByName(rowName, 500);
+            if (!row || !row.isConnected) {
+                if (attempt < MAX_ROW_RETRIES) {
+                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared after option click. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                    continue;
+                }
+                console.warn(`[DocsAutofill] Product row ${rowName} disappeared after option click. Skipping GTIN ${gtin}.`);
+                skipped += 1;
+                processed = true;
+                break;
+            }
+            row.dispatchEvent(new Event('change', { bubbles: true }));
+
+            const weightInputName = `osuProducts[${targetIndex}][weight]`;
+            const disabledWeightInput = await waitForDisabledInputByName(weightInputName, 5000);
+            if (!disabledWeightInput) {
+                if (!rowInputExists(rowName)) {
+                    if (attempt < MAX_ROW_RETRIES) {
+                        console.warn(`[DocsAutofill] Product row ${rowName} disappeared before weight lock. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                        continue;
+                    }
+                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared before weight lock. Skipping GTIN ${gtin}.`);
+                    skipped += 1;
+                    processed = true;
+                    break;
+                }
+                console.warn(`[DocsAutofill] Weight input did not become disabled for ${weightInputName}.`);
+                skipped += 1;
+                processed = true;
+                break;
+            }
+
+            const quantityInputName = `osuProducts[${targetIndex}][quantity]`;
+            const quantityInput = await waitForInputByName(quantityInputName, 3000);
+            if (!quantityInput || !quantityInput.isConnected) {
+                if (!rowInputExists(rowName)) {
+                    if (attempt < MAX_ROW_RETRIES) {
+                        console.warn(`[DocsAutofill] Product row ${rowName} disappeared before quantity input. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                        continue;
+                    }
+                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared before quantity input. Skipping GTIN ${gtin}.`);
+                    skipped += 1;
+                    processed = true;
+                    break;
+                }
+                console.warn(`[DocsAutofill] Quantity input not found for ${quantityInputName}.`);
+                skipped += 1;
+                processed = true;
+                break;
+            }
+
+            await bringIntoView(quantityInput);
+            if (!quantityInput.isConnected) {
+                if (attempt < MAX_ROW_RETRIES) {
+                    console.warn(`[DocsAutofill] Quantity input for ${quantityInputName} disappeared after scroll. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                    continue;
+                }
+                console.warn(`[DocsAutofill] Quantity input for ${quantityInputName} disappeared after scroll. Skipping GTIN ${gtin}.`);
+                skipped += 1;
+                processed = true;
+                break;
+            }
+
+            setReactInputValue(quantityInput, quantity);
+            processed = true;
+            break;
         }
 
-        const quantityInputName = `osuProducts[${targetIndex}][quantity]`;
-        const quantityInput = await waitForInputByName(quantityInputName, 3000);
-        if (!quantityInput) {
-            console.warn(`[DocsAutofill] Quantity input not found for ${quantityInputName}.`);
+        if (!processed) {
+            console.warn(`[DocsAutofill] Exhausted retries for GTIN ${gtin}. Skipping item.`);
             skipped += 1;
-            continue;
         }
-        await bringIntoView(quantityInput);
-        setReactInputValue(quantityInput, quantity);
     }
 }
 
