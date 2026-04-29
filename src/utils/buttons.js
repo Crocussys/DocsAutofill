@@ -7,6 +7,8 @@
  */
 function createButton(onClick, text, size = {}) {
     const button = document.createElement('button');
+    button.type = 'button';
+    button.setAttribute('data-docsautofill-type', 'DocsAutofill_button');
 
     button.textContent = text;
 

@@ -63,6 +63,7 @@ function getAddCodesButton() {
     btn.textContent = "Вставить коды";
     btn.setAttribute('tabindex', "0");
     btn.setAttribute('type', 'button');
+    btn.setAttribute('data-docsautofill-type', 'DocsAutofill_button');
     btn.setAttribute('id', 'add-button');
     btn.onclick = addCodes;
     return btn;
@@ -73,6 +74,7 @@ function getFillDatesButton() {
     btn.textContent = "Вставить даты";
     btn.setAttribute('tabindex', "0");
     btn.setAttribute('type', 'button');
+    btn.setAttribute('data-docsautofill-type', 'DocsAutofill_button');
     btn.setAttribute('id', 'fill-button');
     btn.onclick = addDates;
     return btn;
