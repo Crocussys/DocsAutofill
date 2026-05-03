@@ -1,21 +1,10 @@
 ﻿async function copyCheeseGTIN(statusButtonId) {
-    let rows = document.querySelectorAll('div[data-test="product.row"]');
-    if (!rows || rows.length === 0) {
-        rows = document.querySelectorAll('#redesign-portal .DataRow');
-    }
-    if (!rows || rows.length === 0) {
+    const gtins = await getAllCheeseGTINsFromScroll();
+    if (!gtins || gtins.length === 0) {
         console.warn('[DocsAutofill] GTIN rows not found for copy.');
         return false;
     }
-    const gtins = [];
-    rows.forEach(row => {
-        if (row.querySelector('[data-column="name"]')?.innerText.toLowerCase().startsWith('сыр')) {
-            gtins.push({
-                "gtin": row.querySelector('[data-column="gtin"] a')?.innerText,
-                "quantity": Number(row.querySelector('[data-column="quantity"]')?.innerText.replace(',', '.').match(/\d+(\.\d+)?/)?.[0])
-            })
-        }
-    });
+
     try {
         await navigator.clipboard.writeText(JSON.stringify(gtins));
         if (statusButtonId) {
@@ -25,6 +14,112 @@
     } catch (error) {
         console.warn('[DocsAutofill] Failed to copy GTINs.', error);
         return false;
+    }
+}
+
+async function getAllCheeseGTINsFromScroll() {
+    const selector = 'div[data-test="product.row"], #redesign-portal .DataRow';
+    const initialRows = Array.from(document.querySelectorAll(selector));
+    if (initialRows.length === 0) {
+        return [];
+    }
+
+    const container = getScrollableAncestor(initialRows[0]) || document.scrollingElement || document.documentElement;
+    const originalScrollTop = getScrollTop(container);
+    const maxScroll = Math.max(0, getScrollHeight(container) - getClientHeight(container));
+    const collected = new Map();
+
+    const addVisibleRows = () => {
+        const visibleRows = Array.from(document.querySelectorAll(selector));
+        getCheeseItemsFromRows(visibleRows).forEach(item => {
+            if (!item || !item.gtin) return;
+            const key = `${item.gtin}|${item.quantity}`;
+            if (!collected.has(key)) {
+                collected.set(key, item);
+            }
+        });
+    };
+
+    addVisibleRows();
+    if (maxScroll <= 0) {
+        await scrollToPosition(container, originalScrollTop);
+        return Array.from(collected.values());
+    }
+
+    const step = Math.max(1, Math.round(getClientHeight(container) * 0.7));
+    for (let top = 0; top <= maxScroll; top = Math.min(maxScroll, top + step)) {
+        await scrollToPosition(container, top);
+        await new Promise(resolve => setTimeout(resolve, 150));
+        addVisibleRows();
+        if (top === maxScroll) {
+            break;
+        }
+    }
+
+    await scrollToPosition(container, originalScrollTop);
+    return Array.from(collected.values());
+}
+
+function getCheeseItemsFromRows(rows) {
+    return rows.map(row => {
+        const name = row.querySelector('[data-column="name"]')?.innerText?.trim() ?? '';
+        if (!name.toLowerCase().startsWith('сыр')) {
+            return null;
+        }
+        const gtin = row.querySelector('[data-column="gtin"] a')?.innerText?.trim();
+        const quantityText = row.querySelector('[data-column="quantity"]')?.innerText?.replace(',', '.');
+        const quantity = Number(quantityText?.match(/\d+(\.\d+)?/)?.[0]);
+        return gtin ? { gtin, quantity: Number.isFinite(quantity) ? quantity : 0 } : null;
+    }).filter(Boolean);
+}
+
+function getScrollableAncestor(element) {
+    let current = element;
+    while (current && current !== document.body && current !== document.documentElement) {
+        if (isScrollable(current)) {
+            return current;
+        }
+        current = current.parentElement;
+    }
+    if (isScrollable(document.scrollingElement || document.documentElement)) {
+        return document.scrollingElement || document.documentElement;
+    }
+    return null;
+}
+
+function isScrollable(element) {
+    const style = window.getComputedStyle(element);
+    const overflowY = style.overflowY;
+    const canScroll = overflowY === 'auto' || overflowY === 'scroll';
+    return canScroll && element.scrollHeight > element.clientHeight;
+}
+
+function getScrollTop(element) {
+    if (!element || element === document.scrollingElement || element === document.documentElement) {
+        return window.scrollY || window.pageYOffset || 0;
+    }
+    return element.scrollTop;
+}
+
+function getScrollHeight(element) {
+    if (!element || element === document.scrollingElement || element === document.documentElement) {
+        return document.documentElement.scrollHeight;
+    }
+    return element.scrollHeight;
+}
+
+function getClientHeight(element) {
+    if (!element || element === document.scrollingElement || element === document.documentElement) {
+        return window.innerHeight;
+    }
+    return element.clientHeight;
+}
+
+function scrollToPosition(element, top) {
+    if (!element || element === document.scrollingElement || element === document.documentElement) {
+        window.scrollTo({ left: 0, top, behavior: 'auto' });
+    } else {
+        element.scrollTop = top;
     }
 }
 
