@@ -1,112 +1,21 @@
 ﻿async function copyCheeseGTIN(statusButtonId) {
-    const ROW_SELECTORS = [
-        'div[data-test="product.row"]',
-        '#redesign-portal .DataRow'
-    ];
-    const normalizeText = (value) => String(value ?? '')
-        .replace(/\u00a0/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    const parseQuantity = (value) => {
-        const numeric = normalizeText(value).replace(/\s+/g, '').replace(',', '.');
-        const parsed = Number(numeric.match(/\d+(?:\.\d+)?/)?.[0]);
-        return Number.isFinite(parsed) ? parsed : null;
-    };
-    const getScrollableParent = (element) => {
-        let node = element?.parentElement ?? null;
-        while (node && node !== document.body) {
-            const style = window.getComputedStyle(node);
-            const overflowY = `${style.overflowY ?? ''} ${style.overflow ?? ''}`;
-            const scrollable = /(auto|scroll)/.test(overflowY);
-            if (scrollable && node.scrollHeight > node.clientHeight + 5) {
-                return node;
-            }
-            node = node.parentElement;
-        }
-        return null;
-    };
-    const extractItemFromRow = (row) => {
-        const productName = normalizeText(row.querySelector('[data-column="name"]')?.innerText).toLowerCase();
-        if (!productName.startsWith('сыр')) {
-            return null;
-        }
-        const gtinCell = row.querySelector('[data-column="gtin"]');
-        const gtin = normalizeText(gtinCell?.querySelector('a')?.innerText ?? gtinCell?.innerText).replace(/\s+/g, '');
-        const quantity = parseQuantity(row.querySelector('[data-column="quantity"]')?.innerText);
-        if (!gtin || quantity === null) {
-            return null;
-        }
-        return { gtin, quantity };
-    };
-    const addVisibleRows = (rowSelector, items, seenKeys) => {
-        const rows = Array.from(document.querySelectorAll(rowSelector));
-        rows.forEach((row) => {
-            const item = extractItemFromRow(row);
-            if (!item) {
-                return;
-            }
-            const rowIndex = row.dataset.index
-                ?? row.getAttribute('data-index')
-                ?? row.getAttribute('data-row-index')
-                ?? row.getAttribute('data-rowindex');
-            const key = rowIndex != null
-                ? `row:${rowIndex}`
-                : `item:${item.gtin}|${item.quantity}`;
-            if (seenKeys.has(key)) {
-                return;
-            }
-            seenKeys.add(key);
-            items.push(item);
-        });
-        return rows;
-    };
-
-    const rowSelector = ROW_SELECTORS.find(selector => document.querySelector(selector));
-    if (!rowSelector) {
+    let rows = document.querySelectorAll('div[data-test="product.row"]');
+    if (!rows || rows.length === 0) {
+        rows = document.querySelectorAll('#redesign-portal .DataRow');
+    }
+    if (!rows || rows.length === 0) {
         console.warn('[DocsAutofill] GTIN rows not found for copy.');
         return false;
     }
-
-    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     const gtins = [];
-    const seenKeys = new Set();
-    let visibleRows = addVisibleRows(rowSelector, gtins, seenKeys);
-    if (visibleRows.length === 0) {
-        console.warn('[DocsAutofill] GTIN rows disappeared before copy.');
-        return false;
-    }
-
-    const scrollContainer = getScrollableParent(visibleRows[0]);
-    if (scrollContainer) {
-        const originalScrollTop = scrollContainer.scrollTop;
-        const step = Math.max(200, Math.floor(scrollContainer.clientHeight * 0.8));
-        const maxSteps = 200;
-
-        scrollContainer.scrollTop = 0;
-        await sleep(120);
-
-        for (let i = 0; i < maxSteps; i += 1) {
-            visibleRows = addVisibleRows(rowSelector, gtins, seenKeys);
-            if (visibleRows.length === 0) {
-                break;
-            }
-            const maxTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight);
-            const currentTop = scrollContainer.scrollTop;
-            if (currentTop >= maxTop - 2) {
-                break;
-            }
-            const nextTop = Math.min(maxTop, currentTop + step);
-            if (nextTop <= currentTop) {
-                break;
-            }
-            scrollContainer.scrollTop = nextTop;
-            await sleep(120);
+    rows.forEach(row => {
+        if (row.querySelector('[data-column="name"]')?.innerText.toLowerCase().startsWith('сыр')) {
+            gtins.push({
+                "gtin": row.querySelector('[data-column="gtin"] a')?.innerText,
+                "quantity": Number(row.querySelector('[data-column="quantity"]')?.innerText.replace(',', '.').match(/\d+(\.\d+)?/)?.[0])
+            })
         }
-
-        addVisibleRows(rowSelector, gtins, seenKeys);
-        scrollContainer.scrollTop = originalScrollTop;
-    }
-
+    });
     try {
         await navigator.clipboard.writeText(JSON.stringify(gtins));
         if (statusButtonId) {
@@ -118,6 +27,7 @@
         return false;
     }
 }
+
 const PRODUCT_ROW_NAME_PREFIX = 'osuProducts[';
 const PRODUCT_ROW_NAME_SUFFIX = '][compositeProductKey]';
 
@@ -483,4 +393,3 @@ if (document.readyState === 'loading') {
 } else {
     init();
 }
-
