@@ -1,18 +1,18 @@
-﻿async function copyCheeseGTIN(statusButtonId) {
+﻿async function copyCheeseGTIN() {
     const gtins = await getAllCheeseGTINsFromScroll();
+
     if (!gtins || gtins.length === 0) {
-        console.warn('[DocsAutofill] GTIN rows not found for copy.');
+        NotificationService.warn('Сыры для копирования не найдены');
         return false;
     }
 
     try {
         await navigator.clipboard.writeText(JSON.stringify(gtins));
-        if (statusButtonId) {
-            showStatusMessage(statusButtonId);
-        }
+        NotificationService.info(`Скопировано сыров: ${gtins.length}`);
         return true;
     } catch (error) {
-        console.warn('[DocsAutofill] Failed to copy GTINs.', error);
+        NotificationService.error('Не удалось скопировать сыры');
+        NotificationService.debug(error);
         return false;
     }
 }
@@ -189,12 +189,22 @@ async function pasteCheeseGTIN() {
     };
 
     const items = await getDataFromClipboard(text => JSON.parse(text));
+
+    if (!Array.isArray(items) || items.length === 0) {
+        NotificationService.warn('В буфере нет сыров для вставки');
+        return;
+    }
+
     let skipped = 0;
+    let insertedCount = 0;
+
     for (let index = 0; index < items.length; ++index) {
         const item = items[index];
         const gtin = item["gtin"];
         const quantity = item["quantity"];
+
         let processed = false;
+
         for (let attempt = 1; attempt <= MAX_ROW_RETRIES; attempt += 1) {
             const targetIndex = index - skipped;
             const rowName = getProductRowInputName(targetIndex);
@@ -203,7 +213,7 @@ async function pasteCheeseGTIN() {
             if (!row) {
                 const allRows = getProductRowInputs(false).map(input => input.name).join(', ');
                 const readyRows = getProductRowInputs(true).map(input => input.name).join(', ');
-                console.warn(`[DocsAutofill] Failed to find ready input for product at index ${targetIndex}. Ready rows: ${readyRows || 'none'}. All rows: ${allRows || 'none'}.`);
+                NotificationService.warn(`Failed to find ready input for product at index ${targetIndex}. Ready rows: ${readyRows || 'none'}. All rows: ${allRows || 'none'}.`);
                 if (attempt < MAX_ROW_RETRIES) {
                     continue;
                 }
@@ -215,10 +225,10 @@ async function pasteCheeseGTIN() {
             row = await waitForInputByName(rowName, 300);
             if (!row || !row.isConnected) {
                 if (attempt < MAX_ROW_RETRIES) {
-                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared before GTIN input. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                    NotificationService.warn(`Product row ${rowName} disappeared before GTIN input. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
                     continue;
                 }
-                console.warn(`[DocsAutofill] Product row ${rowName} keeps disappearing. Skipping GTIN ${gtin}.`);
+                NotificationService.warn(`Product row ${rowName} keeps disappearing. Skipping GTIN ${gtin}.`);
                 skipped += 1;
                 processed = true;
                 break;
@@ -232,10 +242,10 @@ async function pasteCheeseGTIN() {
 
             if (!rowInputExists(rowName)) {
                 if (attempt < MAX_ROW_RETRIES) {
-                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared after GTIN input. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                    NotificationService.warn(`Product row ${rowName} disappeared after GTIN input. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
                     continue;
                 }
-                console.warn(`[DocsAutofill] Product row ${rowName} keeps disappearing. Skipping GTIN ${gtin}.`);
+                NotificationService.warn(`Product row ${rowName} keeps disappearing. Skipping GTIN ${gtin}.`);
                 skipped += 1;
                 processed = true;
                 break;
@@ -246,10 +256,10 @@ async function pasteCheeseGTIN() {
                 row = await waitForInputByName(rowName, 500);
                 if (!row || !row.isConnected) {
                     if (attempt < MAX_ROW_RETRIES) {
-                        console.warn(`[DocsAutofill] Product row ${rowName} disappeared while opening GTIN options. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                        NotificationService.warn(`Product row ${rowName} disappeared while opening GTIN options. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
                         continue;
                     }
-                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared while opening GTIN options. Skipping GTIN ${gtin}.`);
+                    NotificationService.warn(`Product row ${rowName} disappeared while opening GTIN options. Skipping GTIN ${gtin}.`);
                     skipped += 1;
                     processed = true;
                     break;
@@ -262,22 +272,22 @@ async function pasteCheeseGTIN() {
             if (!option) {
                 if (!rowInputExists(rowName)) {
                     if (attempt < MAX_ROW_RETRIES) {
-                        console.warn(`[DocsAutofill] Product row ${rowName} disappeared before option select. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                        NotificationService.warn(`Product row ${rowName} disappeared before option select. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
                         continue;
                     }
-                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared before option select. Skipping GTIN ${gtin}.`);
+                    NotificationService.warn(`Product row ${rowName} disappeared before option select. Skipping GTIN ${gtin}.`);
                     skipped += 1;
                     processed = true;
                     break;
                 }
-                console.warn('[DocsAutofill] GTIN option not found. Aborting to avoid wrong selection.');
+                NotificationService.warn('GTIN option not found. Aborting to avoid wrong selection.');
                 skipped += 1;
                 processed = true;
                 break;
             }
 
             if (option.multiple) {
-                console.warn('[DocsAutofill] Multiple GTIN options found. Aborting to avoid wrong selection.');
+                NotificationService.warn('Multiple GTIN options found. Aborting to avoid wrong selection.');
                 skipped += 1;
                 processed = true;
                 break;
@@ -287,10 +297,10 @@ async function pasteCheeseGTIN() {
             row = await waitForInputByName(rowName, 500);
             if (!row || !row.isConnected) {
                 if (attempt < MAX_ROW_RETRIES) {
-                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared after option click. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                    NotificationService.warn(`Product row ${rowName} disappeared after option click. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
                     continue;
                 }
-                console.warn(`[DocsAutofill] Product row ${rowName} disappeared after option click. Skipping GTIN ${gtin}.`);
+                NotificationService.warn(`Product row ${rowName} disappeared after option click. Skipping GTIN ${gtin}.`);
                 skipped += 1;
                 processed = true;
                 break;
@@ -302,15 +312,15 @@ async function pasteCheeseGTIN() {
             if (!disabledWeightInput) {
                 if (!rowInputExists(rowName)) {
                     if (attempt < MAX_ROW_RETRIES) {
-                        console.warn(`[DocsAutofill] Product row ${rowName} disappeared before weight lock. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                        NotificationService.warn(`Product row ${rowName} disappeared before weight lock. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
                         continue;
                     }
-                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared before weight lock. Skipping GTIN ${gtin}.`);
+                    NotificationService.warn(`Product row ${rowName} disappeared before weight lock. Skipping GTIN ${gtin}.`);
                     skipped += 1;
                     processed = true;
                     break;
                 }
-                console.warn(`[DocsAutofill] Weight input did not become disabled for ${weightInputName}.`);
+                NotificationService.warn(`Weight input did not become disabled for ${weightInputName}.`);
                 skipped += 1;
                 processed = true;
                 break;
@@ -321,15 +331,15 @@ async function pasteCheeseGTIN() {
             if (!quantityInput || !quantityInput.isConnected) {
                 if (!rowInputExists(rowName)) {
                     if (attempt < MAX_ROW_RETRIES) {
-                        console.warn(`[DocsAutofill] Product row ${rowName} disappeared before quantity input. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                        NotificationService.warn(`Product row ${rowName} disappeared before quantity input. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
                         continue;
                     }
-                    console.warn(`[DocsAutofill] Product row ${rowName} disappeared before quantity input. Skipping GTIN ${gtin}.`);
+                    NotificationService.warn(`Product row ${rowName} disappeared before quantity input. Skipping GTIN ${gtin}.`);
                     skipped += 1;
                     processed = true;
                     break;
                 }
-                console.warn(`[DocsAutofill] Quantity input not found for ${quantityInputName}.`);
+                NotificationService.warn(`Quantity input not found for ${quantityInputName}.`);
                 skipped += 1;
                 processed = true;
                 break;
@@ -338,24 +348,34 @@ async function pasteCheeseGTIN() {
             await bringIntoView(quantityInput);
             if (!quantityInput.isConnected) {
                 if (attempt < MAX_ROW_RETRIES) {
-                    console.warn(`[DocsAutofill] Quantity input for ${quantityInputName} disappeared after scroll. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
+                    NotificationService.warn(`Quantity input for ${quantityInputName} disappeared after scroll. Retrying ${attempt}/${MAX_ROW_RETRIES}.`);
                     continue;
                 }
-                console.warn(`[DocsAutofill] Quantity input for ${quantityInputName} disappeared after scroll. Skipping GTIN ${gtin}.`);
+                NotificationService.warn(`Quantity input for ${quantityInputName} disappeared after scroll. Skipping GTIN ${gtin}.`);
                 skipped += 1;
                 processed = true;
                 break;
             }
 
             setReactInputValue(quantityInput, quantity);
+            insertedCount += 1;
             processed = true;
             break;
         }
 
         if (!processed) {
-            console.warn(`[DocsAutofill] Exhausted retries for GTIN ${gtin}. Skipping item.`);
+            NotificationService.warn(`Exhausted retries for GTIN ${gtin}. Skipping item.`);
             skipped += 1;
         }
+    }
+
+    NotificationService.info(`Вставлено сыров: ${insertedCount}`);
+
+    const clipboardCount = items.length;
+    const notInsertedCount = clipboardCount - insertedCount;
+
+    if (notInsertedCount > 0) {
+        NotificationService.warn(`Не было вставлено сыров: ${notInsertedCount}. В буфере было: ${clipboardCount}, реально вставлено: ${insertedCount}`);
     }
 }
 
@@ -372,9 +392,8 @@ function init() {
             path: '/warehouse',
             id: 'docsautofill-copy-cheese',
             text: 'Копировать сыры',
-            onClick: () => copyCheeseGTIN('docsautofill-copy-cheese'),
+            onClick: copyCheeseGTIN,
             size: { width: '150px', height: '40px' },
-            statusText: 'Скопировано!',
             marginLeft: '24px',
             marginTop: '24px',
             getContainer: () => {
@@ -451,25 +470,6 @@ function init() {
             }
             if (button.parentElement !== wrapper) {
                 wrapper.appendChild(button);
-            }
-            if (config.statusText) {
-                const statusId = `${config.id}-status`;
-                let status = document.getElementById(statusId);
-                if (!status) {
-                    status = document.createElement('span');
-                    status.id = statusId;
-                    status.textContent = config.statusText;
-                    status.style.opacity = '0';
-                    status.style.transition = 'opacity 0.3s ease';
-                    status.style.color = '#2e7d32';
-                    status.style.fontSize = '14px';
-                    status.style.marginLeft = '8px';
-                    status.style.pointerEvents = 'none';
-                    status.style.userSelect = 'none';
-                }
-                if (status.parentElement !== wrapper) {
-                    wrapper.appendChild(status);
-                }
             }
             wrapper.style.marginLeft = config.marginLeft ?? '24px';
             wrapper.style.marginTop = config.marginTop ?? '24px';

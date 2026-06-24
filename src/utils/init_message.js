@@ -1,1 +1,1 @@
-console.log('DocsAutofill extension enabled');
+NotificationService.debug('DocsAutofill extension enabled');

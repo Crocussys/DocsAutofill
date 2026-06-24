@@ -196,6 +196,6 @@ async function selectMuiOptionByName(inputName, value) {
         }
     }
 
-    console.warn(`[DocsAutofill] MUI option not found or not set: ${inputName}=${targetValue}`);
+    NotificationService.warn(`MUI option not found or not set: ${inputName}=${targetValue}`);
     return false;
 }

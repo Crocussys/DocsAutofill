@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DocsAutofill",
-  "version": "2.1",
+  "version": "3.0",
   "description": "Автоматическое заполнение документов для честного знака",
   "permissions": ["clipboardRead"],
   "content_scripts": [
@@ -10,11 +10,13 @@
         "https://beer.crpt.ru/requests/connect-tap/create*"
       ],
       "js": [
-        "utils/init_message.js",
+        "config.js",
         "libs/xlsx.full.min.js",
+        "utils/notifications.js",
         "utils/react.js",
         "utils/clipboard.js",
         "utils/buttons.js",
+        "utils/init_message.js",
         "pages/beer.js"
       ],
       "all_frames": true,
@@ -25,10 +27,12 @@
         "https://milk.crpt.ru/*"
       ],
       "js": [
-        "utils/init_message.js",
+        "config.js",
+        "utils/notifications.js",
         "utils/react.js",
         "utils/clipboard.js",
         "utils/buttons.js",
+        "utils/init_message.js",
         "pages/cheese.js"
       ],
       "all_frames": true,
