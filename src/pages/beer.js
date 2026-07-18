@@ -83,7 +83,7 @@ async function addCodesFromFile(codes) {
     const dataTransfer = new DataTransfer();
     dataTransfer.items.add(createFile(codes.map(item => item.gtin)));
 
-    const input = await waitForElement('input[type="file"]', 5000);
+    const input = await waitForFileInput();
 
     if (!input) {
         NotificationService.error('Input файла не найден');
@@ -113,7 +113,6 @@ async function addCodesFromFile(codes) {
 
     add_button.click();
 
-    await waitForCodes(codes);
     return true;
 }
 
@@ -138,36 +137,18 @@ async function addCodeFromInput(item) {
 
     option.click();
 
-    return await waitForCode(item.gtin);
+    return true;
 }
 
 async function addDates(codes) {
-    for (const item of codes) {
-        if (!item.date) continue;
+    for (let i = 0; i < codes.length; i++) {
+        const item = codes[i];
 
-        const exists = await waitForCode(item.gtin);
-
-        if (!exists) {
+        if (!item.date) {
             continue;
         }
 
-        const rows = Array.from(document.querySelectorAll('div.DataRow'));
-
-        const row = rows.find(row => {
-            const cell = row.querySelector('div.DataCell-Content div.MuiBox-root');
-            return cell?.textContent === item.gtin;
-        });
-
-        if (!row) {
-            NotificationService.error(`Строка ${item.gtin} не найдена`);
-            continue;
-        }
-
-        const index = row.dataset.index;
-
-        const input = document.querySelector(
-            `input[name="codes[${index}].connectDate"]`
-        );
+        const input = await waitForInputByName(`codes[${i}].connectDate`, 5000);
 
         if (!input) {
             NotificationService.error(`Поле даты для ${item.gtin} не найдено`);

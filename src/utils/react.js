@@ -200,25 +200,43 @@ async function selectMuiOptionByName(inputName, value) {
     return false;
 }
 
-async function waitForCode(gtin, timeoutMs = 5000) {
-    const target = String(gtin).trim();
+async function waitForFileInput(timeoutMs = 5000) {
     const start = Date.now();
 
     while (Date.now() - start < timeoutMs) {
-        const rows = Array.from(document.querySelectorAll('div.DataRow'));
+        const input = document.querySelector('input[type="file"]');
 
-        const exists = rows.some(row => {
-            const cell = row.querySelector('div.DataCell-Content div.MuiBox-root');
-            return cell?.textContent?.trim() === target;
-        });
-
-        if (exists) {
-            return true;
+        if (input) {
+            return input;
         }
 
         await reactSleep(50);
     }
 
-    NotificationService.warn(`Код не появился в таблице: ${target}`);
+    return null;
+}
+
+async function waitForCodes(codes, timeoutMs = 10000) {
+    const targets = codes.map(item => String(item.gtin).trim());
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+        const rows = Array.from(document.querySelectorAll('div.DataRow'));
+
+        const current = new Set(
+            rows.map(row => {
+                const cell = row.querySelector('div.DataCell-Content div.MuiBox-root');
+                return cell?.textContent?.trim();
+            }).filter(Boolean)
+        );
+
+        if (targets.every(gtin => current.has(gtin))) {
+            return true;
+        }
+
+        await reactSleep(100);
+    }
+
+    NotificationService.warn('Не все коды появились в таблице');
     return false;
 }
