@@ -82,58 +82,67 @@ async function addCodes() {
 
 async function findCodeRow(gtin, timeoutMs = 15000) {
     const target = String(gtin).trim();
-
     const start = Date.now();
-    let direction = 1;
-    let lastScroll = -1;
 
-    while (Date.now() - start < timeoutMs) {
+    const checkRows = () => {
         const rows = Array.from(document.querySelectorAll('div.DataRow'));
 
-        const row = rows.find(row => {
-            const text = row.textContent
-                .replace(/\s+/g, ' ')
-                .trim();
+        return rows.find(row => {
+            const text = row.textContent.replace(/\s+/g, ' ').trim();
 
             return text.includes(target);
-        });
+        }) || null;
+    };
+
+    // Сначала несколько раз проверяем текущее положение
+    for (let i = 0; i < 10; i++) {
+        const row = checkRows();
 
         if (row) {
             return row;
         }
 
-        const maxScroll =
-            document.documentElement.scrollHeight - window.innerHeight;
+        await reactSleep(300);
+    }
 
+    let lastScroll = -1;
+
+    while (Date.now() - start < timeoutMs) {
+        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
         const current = window.scrollY;
 
-        if (direction > 0) {
+        if (current >= maxScroll) {
             window.scrollTo({
-                top: Math.min(
-                    current + window.innerHeight * 0.8,
-                    maxScroll
-                ),
+                top: 0,
                 behavior: 'auto'
             });
 
-            if (current >= maxScroll) {
-                direction = -1;
-            }
-        } else {
-            window.scrollTo({
-                top: Math.max(
-                    current - window.innerHeight * 0.8,
-                    0
-                ),
-                behavior: 'auto'
-            });
+            await reactSleep(1000);
 
-            if (current <= 0) {
-                direction = 1;
+            const row = checkRows();
+
+            if (row) {
+                return row;
             }
+
+            break;
         }
 
-        await reactSleep(500);
+        window.scrollTo({
+            top: Math.min(
+                current + window.innerHeight * 0.7,
+                maxScroll
+            ),
+            behavior: 'auto'
+        });
+
+        await reactSleep(700);
+
+        const row = checkRows();
+
+        if (row) {
+            return row;
+        }
 
         if (window.scrollY === lastScroll) {
             break;
