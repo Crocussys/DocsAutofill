@@ -80,38 +80,66 @@ async function addCodes() {
     await addDates(codes);
 }
 
-async function findCodeRow(gtin, timeoutMs = 10000) {
+async function findCodeRow(gtin, timeoutMs = 15000) {
     const target = String(gtin).trim();
 
     const start = Date.now();
+    let direction = 1;
+    let lastScroll = -1;
 
     while (Date.now() - start < timeoutMs) {
         const rows = Array.from(document.querySelectorAll('div.DataRow'));
 
         const row = rows.find(row => {
-            const cell = row.querySelector(
-                'div.DataCell-Content div.MuiBox-root'
-            );
+            const text = row.textContent
+                .replace(/\s+/g, ' ')
+                .trim();
 
-            return cell?.textContent?.trim() === target;
+            return text.includes(target);
         });
 
         if (row) {
             return row;
         }
 
-        await reactSleep(200);
+        const maxScroll =
+            document.documentElement.scrollHeight - window.innerHeight;
 
-        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+        const current = window.scrollY;
 
-        if (window.scrollY < maxScroll) {
-            window.scrollBy({
-                top: window.innerHeight * 0.8,
+        if (direction > 0) {
+            window.scrollTo({
+                top: Math.min(
+                    current + window.innerHeight * 0.8,
+                    maxScroll
+                ),
                 behavior: 'auto'
             });
+
+            if (current >= maxScroll) {
+                direction = -1;
+            }
         } else {
+            window.scrollTo({
+                top: Math.max(
+                    current - window.innerHeight * 0.8,
+                    0
+                ),
+                behavior: 'auto'
+            });
+
+            if (current <= 0) {
+                direction = 1;
+            }
+        }
+
+        await reactSleep(500);
+
+        if (window.scrollY === lastScroll) {
             break;
         }
+
+        lastScroll = window.scrollY;
     }
 
     return null;
