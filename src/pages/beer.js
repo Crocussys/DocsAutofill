@@ -126,15 +126,24 @@ async function addDates(codes) {
     }
 }
 
+function addButton(btn) {
+    const inscription = Array.from(document.querySelectorAll('h3'))
+        .find(h => h.innerText === 'Список кодов');
+
+    if (!inscription) return;
+
+    const container = inscription.parentElement.querySelector('.MuiStack-root');
+    if (!container) return;
+
+    container.appendChild(btn);
+}
+
 function init() {
     const observer = new MutationObserver(() => {
         if (!document.getElementById('add-button')) {
-            createButton({
-                id: 'add-button',
-                text: 'Вставить коды',
-                onClick: addCodes,
-                title: 'Список кодов'
-            });
+            const btn = createButton(addCodes, 'Вставить коды');
+            btn.id = 'add-button';
+            addButton(btn);
         }
     });
 
@@ -143,12 +152,11 @@ function init() {
         subtree: true
     });
 
-    createButton({
-        id: 'add-button',
-        text: 'Вставить коды',
-        onClick: addCodes,
-        title: 'Список кодов'
-    });
+    if (!document.getElementById('add-button')) {
+        const btn = createButton(addCodes, 'Вставить коды');
+        btn.id = 'add-button';
+        addButton(btn);
+    }
 }
 
 if (document.readyState === 'loading') {
