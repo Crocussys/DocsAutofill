@@ -305,7 +305,10 @@ async function checkInsertResult(codes) {
         }
     }
 
-    let message = `Коды вставлены!\nGTIN: ${gtinSuccess}/${codes.length}\n`;
+    let message =
+        `Коды вставлены!\n` +
+        `GTIN: ${gtinSuccess}/${codes.length}\n` +
+        `Даты: ${dateSuccess}/${dateTotal}`;
 
     if (dateTotal > 0) {
         message += `Даты: ${dateSuccess}/${dateTotal}`;
@@ -330,41 +333,37 @@ async function checkInsertResult(codes) {
     }
 }
 
-function init() {
-    const observer = new MutationObserver(() => {
-        if (!document.getElementById('add-button')) {
-            const btn = createButton(
-                addCodes,
-                'Вставить коды',
-                {},
-                {
-                    lockScroll: true
-                }
-            );
+function ensureAddButton() {
+    if (document.getElementById('add-button')) {
+        return;
+    }
 
-            btn.id = 'add-button';
-            addButton(btn);
-        }
+    const btn = createButton(addCodes, 'Вставить коды', {}, {
+        lockScroll: true,
+        operationFlag: 'beerOperationInProgress'
     });
+
+    btn.id = 'add-button';
+
+    if (window.beerOperationInProgress) {
+        btn.disabled = true;
+        btn.textContent = 'Выполняется...';
+        btn.style.backgroundColor = '#9e9e9e';
+        btn.style.cursor = 'wait';
+    }
+
+    addButton(btn);
+}
+
+function init() {
+    const observer = new MutationObserver(ensureAddButton);
 
     observer.observe(document.body, {
         childList: true,
         subtree: true
     });
 
-    if (!document.getElementById('add-button')) {
-        const btn = createButton(
-            addCodes,
-            'Вставить коды',
-            {},
-            {
-                lockScroll: true
-            }
-        );
-
-        btn.id = 'add-button';
-        addButton(btn);
-    }
+    ensureAddButton();
 }
 
 if (document.readyState === 'loading') {

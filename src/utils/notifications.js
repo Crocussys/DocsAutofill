@@ -94,7 +94,8 @@ const NotificationService = (() => {
       transform: 'translateX(20px)',
       transition: 'opacity 200ms ease, transform 200ms ease',
       pointerEvents: 'auto',
-      wordBreak: 'break-word'
+      wordBreak: 'break-word',
+      whiteSpace: 'pre-line'
     });
 
     container.appendChild(notification);

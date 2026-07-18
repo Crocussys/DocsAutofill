@@ -19,8 +19,16 @@ function createButton(onClick, text, size = {}, options = {}) {
 
     if (typeof onClick === 'function') {
         button.addEventListener('click', async () => {
+            if (options.operationFlag && window[options.operationFlag]) {
+                return;
+            }
+
             if (button.disabled) {
                 return;
+            }
+
+            if (options.operationFlag) {
+                window[options.operationFlag] = true;
             }
 
             button.disabled = true;
@@ -47,6 +55,10 @@ function createButton(onClick, text, size = {}, options = {}) {
             } finally {
                 if (options.lockScroll) {
                     unlockUserScroll();
+                }
+
+                if (options.operationFlag) {
+                    window[options.operationFlag] = false;
                 }
 
                 button.disabled = false;
