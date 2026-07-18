@@ -25,9 +25,12 @@
                 date: elems[1]
             });
         } else {
+            NotificationService.error(`Неизвестный формат строки: ${line}`);
             return null;
         }
     }
+
+    NotificationService.debug(`Распознано кодов: ${result.length}`);
 
     return result;
 }
@@ -36,13 +39,20 @@ function createFile(codes) {
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.aoa_to_sheet(codes.map(item => [item]));
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
-    const blob = new Blob([XLSX.write(workbook, { bookType: "xlsx", type: "array", bookSST: true })], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const blob = new Blob(
+        [XLSX.write(workbook, { bookType: "xlsx", type: "array", bookSST: true })],
+        { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+    );
     return new File([blob], "codes.xlsx", { type: blob.type });
 }
 
 async function addCodes() {
     const codes = await getDataFromClipboard(dataPars);
-    if (!codes) return;
+
+    if (!codes) {
+        NotificationService.error('Не удалось получить коды из буфера');
+        return;
+    }
 
     const rows = document.querySelectorAll('div.DataRow');
 
@@ -59,26 +69,43 @@ async function addCodes() {
 
 async function addCodesFromFile(codes) {
     const load_file_button = findButtonByText('Загрузить файл', false, this.parentElement);
-    if (!load_file_button) return;
+
+    if (!load_file_button) {
+        NotificationService.error('Кнопка "Загрузить файл" не найдена');
+        return;
+    }
 
     load_file_button.click();
-
     const dataTransfer = new DataTransfer();
     dataTransfer.items.add(createFile(codes.map(item => item.gtin)));
 
     const input = document.querySelector('input[type="file"]');
+
+    if (!input) {
+        NotificationService.error('Input файла не найден');
+        return;
+    }
+
     input.files = dataTransfer.files;
     input.dispatchEvent(new Event("change", { bubbles: true }));
 
     const footer = document.getElementsByClassName('CisDialog-Footer')[0];
 
     const load_button = await waitForButtonByText(footer, 'Загрузить', 5000, false);
-    if (!load_button) return;
+
+    if (!load_button) {
+        NotificationService.error('Кнопка "Загрузить" не найдена');
+        return;
+    }
 
     load_button.click();
 
     const add_button = await waitForButtonByText(footer, 'Добавить', 5000, false);
-    if (!add_button) return;
+
+    if (!add_button) {
+        NotificationService.error('Кнопка "Добавить" не найдена');
+        return;
+    }
 
     add_button.click();
 
@@ -87,12 +114,20 @@ async function addCodesFromFile(codes) {
 
 async function addCodeFromInput(item) {
     const input = document.querySelector('input[name="codes"]');
-    if (!input) return;
+
+    if (!input) {
+        NotificationService.error('Поле добавления кода не найдено');
+        return;
+    }
 
     setReactInputValue(input, item.gtin);
 
     const option = await waitForElement('.MuiAutocomplete-option', 5000);
-    if (!option) return;
+
+    if (!option) {
+        NotificationService.error(`Вариант для ${item.gtin} не найден`);
+        return;
+    }
 
     option.click();
 
@@ -112,7 +147,10 @@ async function addDates(codes) {
             return cell?.textContent === item.gtin;
         });
 
-        if (!row) continue;
+        if (!row) {
+            NotificationService.error(`Строка ${item.gtin} не найдена`);
+            continue;
+        }
 
         const index = row.dataset.index;
 
@@ -120,7 +158,10 @@ async function addDates(codes) {
             `input[name="codes[${index}].connectDate"]`
         );
 
-        if (!input) continue;
+        if (!input) {
+            NotificationService.error(`Поле даты для ${item.gtin} не найдено`);
+            continue;
+        }
 
         setReactInputValue(input, item.date);
     }
@@ -130,10 +171,17 @@ function addButton(btn) {
     const inscription = Array.from(document.querySelectorAll('h3'))
         .find(h => h.innerText === 'Список кодов');
 
-    if (!inscription) return;
+    if (!inscription) {
+        NotificationService.error('Заголовок "Список кодов" не найден');
+        return;
+    }
 
     const container = inscription.parentElement.querySelector('.MuiStack-root');
-    if (!container) return;
+
+    if (!container) {
+        NotificationService.error('Контейнер кнопок не найден');
+        return;
+    }
 
     container.appendChild(btn);
 }
