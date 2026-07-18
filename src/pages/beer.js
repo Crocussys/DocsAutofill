@@ -64,6 +64,12 @@ async function addCodes() {
         }
     } else {
         for (const item of codes) {
+            const existingRow = await findCodeRow(item.gtin);
+
+            if (existingRow) {
+                continue;
+            }
+
             await addCodeFromInput(item);
         }
     }
