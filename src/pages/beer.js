@@ -127,7 +127,21 @@ async function addDates(codes) {
 }
 
 function init() {
-    observer.observe(document.body, { childList: true, subtree: true });
+    const observer = new MutationObserver(() => {
+        if (!document.getElementById('add-button')) {
+            createButton({
+                id: 'add-button',
+                text: 'Вставить коды',
+                onClick: addCodes,
+                title: 'Список кодов'
+            });
+        }
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
 
     createButton({
         id: 'add-button',
