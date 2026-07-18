@@ -164,19 +164,56 @@ async function addCodeFromInput(item) {
     return true;
 }
 
+async function findCodeRow(gtin, timeoutMs = 10000) {
+    const target = String(gtin).trim();
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+        const rows = Array.from(document.querySelectorAll('div.DataRow'));
+
+        const row = rows.find(row => {
+            const cell = row.querySelector(
+                'div.DataCell-Content div.MuiBox-root'
+            );
+
+            return cell?.textContent?.trim() === target;
+        });
+
+        if (row) {
+            return row;
+        }
+
+        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+
+        if (window.scrollY >= maxScroll) {
+            break;
+        }
+
+        window.scrollBy({
+            top: window.innerHeight * 0.8,
+            behavior: 'auto'
+        });
+
+        await reactSleep(200);
+    }
+
+    return null;
+}
+
 async function addDates(codes) {
+    window.scrollTo({
+        top: 0,
+        behavior: 'auto'
+    });
+
+    await reactSleep(200);
+
     for (const item of codes) {
         if (!item.date) {
             continue;
         }
 
-        const rows = Array.from(document.querySelectorAll('div.DataRow'));
-
-        const row = rows.find(row => {
-            const cell = row.querySelector('div.DataCell-Content div.MuiBox-root');
-
-            return cell?.textContent?.trim() === item.gtin;
-        });
+        const row = await findCodeRow(item.gtin);
 
         if (!row) {
             NotificationService.error(`Строка ${item.gtin} не найдена`);
@@ -192,7 +229,14 @@ async function addDates(codes) {
         }
 
         setReactInputValue(input, item.date);
+
+        await reactSleep(100);
     }
+
+    window.scrollTo({
+        top: 0,
+        behavior: 'auto'
+    });
 }
 
 function addButton(btn) {
