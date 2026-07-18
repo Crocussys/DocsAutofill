@@ -17,7 +17,7 @@
                 gtin: elems[0]
             });
         } else if (
-            elems.length === 2 &&
+            elems.length >= 2 &&
             /^(\d{2})\.(\d{2})\.(\d{4})$/.test(elems[1])
         ) {
             result.push({
