@@ -85,7 +85,7 @@ function addButton(btn) {
     const container = inscription.parentElement.querySelector('.MuiStack-root');
     const otherButton = container.getElementsByTagName('button')[0];
     if (!otherButton) {
-        console.warn('[DateAutofill] Кнопки не найдены')
+        NotificationService.warn('Кнопки не найдены')
         return;
     }
 

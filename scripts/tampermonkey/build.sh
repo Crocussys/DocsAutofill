@@ -82,11 +82,13 @@ build_userscript \
     "Autofill documents for beer.crpt.ru" \
     "https://beer.crpt.ru/requests/connect-tap/create*" \
     "$OUTPUT_DIR/docsautofill-beer.user.js" \
-    "utils/init_message.js" \
+    "config.js" \
     "libs/xlsx.full.min.js" \
+    "utils/notifications.js" \
     "utils/react.js" \
     "utils/clipboard.js" \
     "utils/buttons.js" \
+    "utils/init_message.js" \
     "pages/beer.js"
 
 build_userscript \
@@ -94,10 +96,12 @@ build_userscript \
     "Autofill documents for milk.crpt.ru" \
     "https://milk.crpt.ru/*" \
     "$OUTPUT_DIR/docsautofill-milk.user.js" \
-    "utils/init_message.js" \
+    "config.js" \
+    "utils/notifications.js" \
     "utils/react.js" \
     "utils/clipboard.js" \
     "utils/buttons.js" \
+    "utils/init_message.js" \
     "pages/cheese.js"
 
 echo "Generated:"
