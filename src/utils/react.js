@@ -1,5 +1,7 @@
 const reactSleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+let userScrollLocked = false;
+
 function setReactInputValue(input, value) {
     if (!input) return;
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
@@ -80,6 +82,49 @@ async function waitForStableInputByName(inputName, timeoutMs = 7000, stableMs = 
         }
         await reactSleep(50);
     }
+    return null;
+}
+
+async function waitForAutocompleteOption(input, value, timeoutMs = 8000) {
+    const targetValue = String(value).trim();
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+        const listboxId = input.getAttribute('aria-controls') ||
+                          input.getAttribute('aria-owns');
+
+        let listbox = listboxId
+            ? document.getElementById(listboxId)
+            : null;
+
+        if (!listbox) {
+            listbox = document.querySelector('ul[role="listbox"]');
+        }
+
+        if (listbox) {
+            const options = Array.from(
+                listbox.querySelectorAll('li[role="option"]')
+            );
+
+            const exact = options.find(option => {
+                const dataValue = option.getAttribute('data-value')?.trim() ?? '';
+                const text = option.textContent?.trim() ?? '';
+
+                return dataValue === targetValue || text === targetValue;
+            });
+
+            if (exact) {
+                return exact;
+            }
+
+            if (options.length === 1) {
+                return options[0];
+            }
+        }
+
+        await reactSleep(50);
+    }
+
     return null;
 }
 
@@ -198,4 +243,103 @@ async function selectMuiOptionByName(inputName, value) {
 
     NotificationService.warn(`MUI option not found or not set: ${inputName}=${targetValue}`);
     return false;
+}
+
+async function waitForFileInput(timeoutMs = 5000) {
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+        const input = document.querySelector('input[type="file"]');
+
+        if (input) {
+            return input;
+        }
+
+        await reactSleep(50);
+    }
+
+    return null;
+}
+
+async function waitForCodes(codes, timeoutMs = 10000) {
+    const targets = codes.map(item => String(item.gtin).trim());
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+        const rows = Array.from(document.querySelectorAll('div.DataRow'));
+
+        const current = new Set(
+            rows.map(row => {
+                const cell = row.querySelector('div.DataCell-Content div.MuiBox-root');
+                return cell?.textContent?.trim();
+            }).filter(Boolean)
+        );
+
+        if (targets.every(gtin => current.has(gtin))) {
+            return true;
+        }
+
+        await reactSleep(100);
+    }
+
+    NotificationService.warn('Не все коды появились в таблице');
+    return false;
+}
+
+async function waitForGtinInput(timeoutMs = 5000) {
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+        const inputs = Array.from(document.querySelectorAll('input'));
+
+        const input = inputs.find(input => !input.name);
+
+        if (input) {
+            return input;
+        }
+
+        await reactSleep(50);
+    }
+
+    return null;
+}
+
+function lockUserScroll() {
+    if (userScrollLocked) return;
+
+    userScrollLocked = true;
+
+    window.addEventListener('wheel', preventUserScroll, { passive: false });
+    window.addEventListener('touchmove', preventUserScroll, { passive: false });
+    window.addEventListener('keydown', preventKeyboardScroll, { passive: false });
+}
+
+function unlockUserScroll() {
+    if (!userScrollLocked) return;
+
+    userScrollLocked = false;
+
+    window.removeEventListener('wheel', preventUserScroll);
+    window.removeEventListener('touchmove', preventUserScroll);
+    window.removeEventListener('keydown', preventKeyboardScroll);
+}
+
+function preventUserScroll(event) {
+    event.preventDefault();
+}
+
+function preventKeyboardScroll(event) {
+    const keys = [
+        'ArrowUp',
+        'ArrowDown',
+        'PageUp',
+        'PageDown',
+        'Home',
+        'End',
+        ' '
+    ];
+
+    if (keys.includes(event.key)) {
+        event.preventDefault();
+    }
 }

@@ -1,16 +1,17 @@
-/**
- * Создаёт кнопку и возвращает DOM-элемент
- * @param {Function} onClick - функция, выполняемая при нажатии
- * @param {string} text - текст на кнопке
- * @param {{ width?: string, height?: string }} size - размеры кнопки (например: { width: '120px', height: '40px' })
- * @returns {HTMLButtonElement}
- */
-function createButton(onClick, text, size = {}) {
+function createButton(onClick, text, size = {}, options = {}) {
     const button = document.createElement('button');
+
     button.type = 'button';
     button.setAttribute('data-docsautofill-type', 'DocsAutofill_button');
 
     button.textContent = text;
+
+    button.dataset.normalText = text;
+    button.dataset.busyText = options.busyText || 'Выполняется...';
+
+    if (options.operationFlag) {
+        button.dataset.operationFlag = options.operationFlag;
+    }
 
     button.style.backgroundColor = '#1e88e5';
     button.style.color = '#ffffff';
@@ -24,7 +25,50 @@ function createButton(onClick, text, size = {}) {
     if (size.height) button.style.height = size.height;
 
     if (typeof onClick === 'function') {
-        button.addEventListener('click', onClick);
+        button.addEventListener('click', async () => {
+            if (options.operationFlag && window[options.operationFlag]) {
+                return;
+            }
+
+            if (button.disabled) {
+                return;
+            }
+
+            if (options.operationFlag) {
+                window[options.operationFlag] = true;
+            }
+
+            updateButtonState(button);
+
+            await reactSleep(0);
+
+            if (options.lockScroll) {
+                lockUserScroll();
+            }
+
+            try {
+                await onClick();
+            } catch (error) {
+                NotificationService.error('Ошибка выполнения операции');
+                NotificationService.debug(error);
+            } finally {
+                if (options.lockScroll) {
+                    unlockUserScroll();
+                }
+
+                if (options.operationFlag) {
+                    window[options.operationFlag] = false;
+                }
+
+                requestAnimationFrame(() => {
+                    const currentButton = document.getElementById(button.id);
+
+                    if (currentButton) {
+                        updateButtonState(currentButton);
+                    }
+                });
+            }
+        });
     }
 
     return button;
@@ -114,4 +158,17 @@ async function waitForButtonByText(container, text, timeoutMs = 5000, exact = fa
         await new Promise(resolve => setTimeout(resolve, pollMs));
     }
     return null;
+}
+
+function updateButtonState(button) {
+    const flag = button.dataset.operationFlag;
+    const busy = flag ? window[flag] : false;
+
+    button.disabled = busy;
+    button.textContent = busy
+        ? button.dataset.busyText
+        : button.dataset.normalText;
+
+    button.style.backgroundColor = busy ? '#9e9e9e' : '#1e88e5';
+    button.style.cursor = busy ? 'wait' : 'pointer';
 }

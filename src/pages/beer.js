@@ -1,133 +1,370 @@
 ﻿function dataPars(data) {
-    const lines = data.replace(/^(?:\r?\n)+|(?:\r?\n)+$/g, '').split(/\r?\n/);
-    let codes = {};
+    try {
+        return JSON.parse(data);
+    } catch (_) {}
+
+    const result = [];
+
+    const lines = data
+        .replace(/^(?:\r?\n)+|(?:\r?\n)+$/g, '')
+        .split(/\r?\n/);
+
     for (const line of lines) {
         const elems = line.trim().split(/\s+/);
-        if (!elems[0] || !/^(\d{2})\.(\d{2})\.(\d{4})$/.test(elems[1])) continue;
-        codes[elems[0]] = elems[1];
+
+        if (elems.length === 1) {
+            result.push({
+                gtin: elems[0]
+            });
+        } else if (
+            elems.length >= 2 &&
+            /^(\d{2})\.(\d{2})\.(\d{4})$/.test(elems[1])
+        ) {
+            result.push({
+                gtin: elems[0],
+                date: elems[1]
+            });
+        } else {
+            NotificationService.error(`Неизвестный формат строки: ${line}`);
+            return null;
+        }
     }
-    return codes;
+
+    NotificationService.debug(`Распознано кодов: ${result.length}`);
+
+    return result;
 }
 
 function createFile(codes) {
     const workbook = XLSX.utils.book_new();
     const worksheet = XLSX.utils.aoa_to_sheet(codes.map(item => [item]));
     XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
-    const blob = new Blob([XLSX.write(workbook, { bookType: "xlsx", type: "array", bookSST: true })], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const blob = new Blob(
+        [XLSX.write(workbook, { bookType: "xlsx", type: "array", bookSST: true })],
+        { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }
+    );
     return new File([blob], "codes.xlsx", { type: blob.type });
 }
 
-async function addDates() {
-    const data = await getDataFromClipboard(dataPars);
-    const codes = Object.keys(data);
-    const rows = Array.from(document.querySelectorAll('div.DataRow'));
-    const map = new Map();
-    for (const row of rows) {
-        const codeCell = row.querySelector('div.DataCell-Content div.MuiBox-root');
-        if (!codeCell) continue;
-        map.set(codeCell.textContent, row.dataset.index);
+async function addCodes() {
+    const codes = await getDataFromClipboard(dataPars);
+
+    if (!codes) {
+        NotificationService.error('Не удалось получить коды из буфера');
+        return;
     }
-    for (const code of codes) {
-        const data_index = map.get(code);
-        if (!data_index) continue;
-        const input = document.querySelector(`input[name="codes[${data_index}].connectDate"]`);
-        if (!input) continue;
-        setReactInputValue(input, data[code]);
+
+    const rows = document.querySelectorAll('div.DataRow');
+
+    if (rows.length === 0) {
+        const success = await addCodesFromFile(codes);
+
+        if (!success) {
+            return;
+        }
+    } else {
+        for (const item of codes) {
+            const existingRow = await findCodeRow(item.gtin);
+
+            if (existingRow) {
+                continue;
+            }
+
+            await addCodeFromInput(item);
+        }
     }
+
+    await addDates(codes);
+    await checkInsertResult(codes);
 }
 
-async function addCodes() {
-    const load_file_button = findButtonByText('Загрузить файл', false, this.parentElement);
-    if (!load_file_button) return;
+async function findCodeRow(gtin, timeoutMs = 15000) {
+    const target = String(gtin).trim();
+    const start = Date.now();
+
+    const checkRows = () => {
+        const rows = Array.from(document.querySelectorAll('div.DataRow'));
+
+        return rows.find(row => {
+            const text = row.textContent.replace(/\s+/g, ' ').trim();
+
+            return text.includes(target);
+        }) || null;
+    };
+
+    // Сначала несколько раз проверяем текущее положение
+    for (let i = 0; i < 10; i++) {
+        const row = checkRows();
+
+        if (row) {
+            return row;
+        }
+
+        await reactSleep(300);
+    }
+
+    let lastScroll = -1;
+
+    while (Date.now() - start < timeoutMs) {
+        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+        const current = window.scrollY;
+
+        if (current >= maxScroll) {
+            window.scrollTo({
+                top: 0,
+                behavior: 'auto'
+            });
+
+            await reactSleep(1000);
+
+            const row = checkRows();
+
+            if (row) {
+                return row;
+            }
+
+            break;
+        }
+
+        window.scrollTo({
+            top: Math.min(
+                current + window.innerHeight * 0.7,
+                maxScroll
+            ),
+            behavior: 'auto'
+        });
+
+        await reactSleep(700);
+
+        const row = checkRows();
+
+        if (row) {
+            return row;
+        }
+
+        if (window.scrollY === lastScroll) {
+            break;
+        }
+
+        lastScroll = window.scrollY;
+    }
+
+    return null;
+}
+
+async function addCodesFromFile(codes) {
+    const load_file_button = findButtonByText('Загрузить файл', false);
+
+    if (!load_file_button) {
+        NotificationService.error('Кнопка "Загрузить файл" не найдена');
+        return false;
+    }
+
+    if (
+        load_file_button.disabled ||
+        load_file_button.getAttribute('aria-disabled') === 'true'
+    ) {
+        NotificationService.error('Сначала введите адрес');
+        return false;
+    }
 
     load_file_button.click();
-    const codes = await getDataFromClipboard(dataPars);
     const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(createFile(Object.keys(codes)));
-    const input = document.querySelector('input[type="file"]');
+    dataTransfer.items.add(createFile(codes.map(item => item.gtin)));
+
+    const input = await waitForFileInput();
+
+    if (!input) {
+        NotificationService.error('Input файла не найден');
+        return false;
+    }
+
     input.files = dataTransfer.files;
     input.dispatchEvent(new Event("change", { bubbles: true }));
 
     const footer = document.getElementsByClassName('CisDialog-Footer')[0];
+
     const load_button = await waitForButtonByText(footer, 'Загрузить', 5000, false);
-    if (!load_button) return;
+
+    if (!load_button) {
+        NotificationService.error('Кнопка "Загрузить" не найдена');
+        return false;
+    }
+
     load_button.click();
 
     const add_button = await waitForButtonByText(footer, 'Добавить', 5000, false);
-    if (!add_button) return;
+
+    if (!add_button) {
+        NotificationService.error('Кнопка "Добавить" не найдена');
+        return false;
+    }
+
     add_button.click();
+
+    await waitForCodes(codes);
+
+    return true;
 }
 
-function getAddCodesButton() {
-    const btn = document.createElement("button");
-    btn.textContent = "Вставить коды";
-    btn.setAttribute('tabindex', "0");
-    btn.setAttribute('type', 'button');
-    btn.setAttribute('data-docsautofill-type', 'DocsAutofill_button');
-    btn.setAttribute('id', 'add-button');
-    btn.onclick = addCodes;
-    return btn;
+async function addCodeFromInput(item) {
+    const input = await waitForGtinInput();
+
+    if (!input) {
+        NotificationService.error('Поле добавления кода не найдено');
+        return false;
+    }
+
+    setReactInputValue(input, item.gtin);
+
+    const option = await waitForAutocompleteOption(input, item.gtin);
+
+    if (!option || option.multiple) {
+        NotificationService.error(`Не найден вариант для ${item.gtin}`);
+        return false;
+    }
+
+    option.click();
+
+    return true;
 }
 
-function getFillDatesButton() {
-    const btn = document.createElement("button");
-    btn.textContent = "Вставить даты";
-    btn.setAttribute('tabindex', "0");
-    btn.setAttribute('type', 'button');
-    btn.setAttribute('data-docsautofill-type', 'DocsAutofill_button');
-    btn.setAttribute('id', 'fill-button');
-    btn.onclick = addDates;
-    return btn;
+async function addDates(codes) {
+    window.scrollTo(0, 0);
+
+    await reactSleep(1000);
+
+    for (const item of codes) {
+        if (!item.date) {
+            continue;
+        }
+
+        const row = await findCodeRow(item.gtin);
+
+        if (!row) {
+            NotificationService.error(`Строка ${item.gtin} не найдена`);
+            continue;
+        }
+
+        const index = row.dataset.index;
+        const input = await waitForInputByName(`codes[${index}].connectDate`, 5000);
+
+        if (!input) {
+            NotificationService.error(`Поле даты для ${item.gtin} не найдено`);
+            continue;
+        }
+
+        setReactInputValue(input, item.date);
+
+        await reactSleep(100);
+    }
+
+    window.scrollTo(0, 0);
 }
 
 function addButton(btn) {
-    const inscription = Array.from(document.querySelectorAll('h3')).find(h => h.innerText === 'Список кодов');
+    const inscription = Array.from(document.querySelectorAll('h3'))
+        .find(h => h.innerText === 'Список кодов');
+
+    if (!inscription) return false;
+
     const container = inscription.parentElement.querySelector('.MuiStack-root');
-    const otherButton = container.getElementsByTagName('button')[0];
-    if (!otherButton) {
-        NotificationService.warn('Кнопки не найдены')
+    if (!container) return false;
+
+    container.appendChild(btn);
+}
+
+async function checkInsertResult(codes) {
+    let gtinSuccess = 0;
+    let gtinFailed = [];
+
+    let dateTotal = 0;
+    let dateSuccess = 0;
+    let dateFailed = [];
+
+    for (const item of codes) {
+        const row = await findCodeRow(item.gtin);
+
+        if (row) {
+            gtinSuccess++;
+
+            if (item.date) {
+                dateTotal++;
+
+                const index = row.dataset.index;
+                const input = document.querySelector(`input[name="codes[${index}].connectDate"]`);
+
+                if (input?.value === item.date) {
+                    dateSuccess++;
+                } else {
+                    dateFailed.push(item.gtin);
+                }
+            }
+        } else {
+            gtinFailed.push(item.gtin);
+
+            if (item.date) {
+                dateTotal++;
+                dateFailed.push(item.gtin);
+            }
+        }
+    }
+
+    let message =
+        `Коды вставлены!\n` +
+        `GTIN: ${gtinSuccess}/${codes.length}`;
+
+    if (dateTotal > 0) {
+        message += `\nДаты: ${dateSuccess}/${dateTotal}`;
+    }
+
+    if (gtinFailed.length > 0) {
+        NotificationService.warn(
+            `Не вставлены GTIN (${gtinFailed.length}):\n${gtinFailed.join(', ')}`
+        );
+    }
+
+    if (dateFailed.length > 0) {
+        NotificationService.warn(
+            `Не вставлены даты (${dateFailed.length}):\n${dateFailed.join(', ')}`
+        );
+    }
+
+    if (gtinFailed.length === 0 && dateFailed.length === 0) {
+        NotificationService.info(message);
+    } else {
+        NotificationService.warn(message);
+    }
+}
+
+function ensureAddButton() {
+    if (document.getElementById('add-button')) {
         return;
     }
 
-    container.appendChild(btn);
-
-    function syncClass() {
-        btn.className = otherButton.className;
-    }
-
-    syncClass();
-
-    let observerBtn = new MutationObserver(syncClass);
-    observerBtn.observe(otherButton, { attributes: true, attributeFilter: ['class'] });
-
-    let observerContainer = new MutationObserver(() => {
-        const newOther = container.getElementsByTagName('button')[0];
-        if (newOther && newOther !== otherButton) {
-            observerBtn.disconnect();
-            observerBtn = new MutationObserver(syncClass);
-            observerBtn.observe(newOther, { attributes: true, attributeFilter: ['class'] });
-        }
+    const btn = createButton(addCodes, 'Вставить коды', {}, {
+        lockScroll: true,
+        operationFlag: 'beerOperationInProgress'
     });
-    observerContainer.observe(container, { childList: true, subtree: true });
+
+    btn.id = 'add-button';
+
+    addButton(btn);
+
+    updateButtonState(btn);
 }
 
 function init() {
     const observer = new MutationObserver(() => {
-        if (!document.getElementById('add-button')) {
-            addButton(getAddCodesButton());
-        }
-
-        if (document.querySelector('div[role="rowgroup"]') && !document.getElementById('fill-button')) {
-            addButton(getFillDatesButton());
-        }
+        ensureAddButton();
     });
 
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
 
-    addButton(getAddCodesButton());
-    if (document.querySelector('div[role="rowgroup"]')) {
-        addButton(getFillDatesButton());
-    }
+    ensureAddButton();
 }
 
 if (document.readyState === 'loading') {
@@ -135,4 +372,3 @@ if (document.readyState === 'loading') {
 } else {
     init();
 }
-
