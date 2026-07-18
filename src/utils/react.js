@@ -1,5 +1,7 @@
 const reactSleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+let userScrollLocked = false;
+
 function setReactInputValue(input, value) {
     if (!input) return;
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
@@ -300,4 +302,44 @@ async function waitForGtinInput(timeoutMs = 5000) {
     }
 
     return null;
+}
+
+function lockUserScroll() {
+    if (userScrollLocked) return;
+
+    userScrollLocked = true;
+
+    window.addEventListener('wheel', preventUserScroll, { passive: false });
+    window.addEventListener('touchmove', preventUserScroll, { passive: false });
+    window.addEventListener('keydown', preventKeyboardScroll, { passive: false });
+}
+
+function unlockUserScroll() {
+    if (!userScrollLocked) return;
+
+    userScrollLocked = false;
+
+    window.removeEventListener('wheel', preventUserScroll);
+    window.removeEventListener('touchmove', preventUserScroll);
+    window.removeEventListener('keydown', preventKeyboardScroll);
+}
+
+function preventUserScroll(event) {
+    event.preventDefault();
+}
+
+function preventKeyboardScroll(event) {
+    const keys = [
+        'ArrowUp',
+        'ArrowDown',
+        'PageUp',
+        'PageDown',
+        'Home',
+        'End',
+        ' '
+    ];
+
+    if (keys.includes(event.key)) {
+        event.preventDefault();
+    }
 }

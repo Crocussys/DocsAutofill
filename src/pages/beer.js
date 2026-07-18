@@ -1,4 +1,7 @@
-﻿function dataPars(data) {
+﻿let isAddingCodes = false;
+
+
+function dataPars(data) {
     try {
         return JSON.parse(data);
     } catch (_) {}
@@ -63,22 +66,12 @@ async function addCodes() {
             return;
         }
     } else {
-        window.scrollTo(0, 0);
-        await reactSleep(200);
-
         for (const item of codes) {
-            const exists = await findCodeRow(item.gtin);
-
-            if (exists) {
-                continue;
-            }
-
             await addCodeFromInput(item);
         }
     }
 
     await addDates(codes);
-    await checkInsertResult(codes);
 }
 
 async function findCodeRow(gtin, timeoutMs = 15000) {
@@ -311,7 +304,7 @@ async function checkInsertResult(codes) {
         }
     }
 
-    let message = `GTIN: ${gtinSuccess}/${codes.length}\n`;
+    let message = `Коды вставлены!\nGTIN: ${gtinSuccess}/${codes.length}\n`;
 
     if (dateTotal > 0) {
         message += `Даты: ${dateSuccess}/${dateTotal}`;
@@ -339,9 +332,16 @@ async function checkInsertResult(codes) {
 function init() {
     const observer = new MutationObserver(() => {
         if (!document.getElementById('add-button')) {
-            const btn = createButton(addCodes, 'Вставить коды');
-            btn.id = 'add-button';
+            const btn = createButton(
+                addCodes,
+                'Вставить коды',
+                {},
+                {
+                    lockScroll: true
+                }
+            );
 
+            btn.id = 'add-button';
             addButton(btn);
         }
     });
@@ -351,9 +351,19 @@ function init() {
         subtree: true
     });
 
-    const btn = createButton(addCodes, 'Вставить коды');
-    btn.id = 'add-button';
-    addButton(btn);
+    if (!document.getElementById('add-button')) {
+        const btn = createButton(
+            addCodes,
+            'Вставить коды',
+            {},
+            {
+                lockScroll: true
+            }
+        );
+
+        btn.id = 'add-button';
+        addButton(btn);
+    }
 }
 
 if (document.readyState === 'loading') {

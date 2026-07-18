@@ -424,6 +424,7 @@ function init() {
             size: { width: '150px', height: '40px' },
             marginLeft: '0px',
             marginTop: '8px',
+            lockScroll: true,
             getContainer: () => {
                 const title = Array.from(document.querySelectorAll('h4'))
                     .find(el => (el.textContent ?? '').trim().includes('Список товаров'));

@@ -1,12 +1,6 @@
-/**
- * Создаёт кнопку и возвращает DOM-элемент
- * @param {Function} onClick - функция, выполняемая при нажатии
- * @param {string} text - текст на кнопке
- * @param {{ width?: string, height?: string }} size - размеры кнопки (например: { width: '120px', height: '40px' })
- * @returns {HTMLButtonElement}
- */
-function createButton(onClick, text, size = {}) {
+function createButton(onClick, text, size = {}, options = {}) {
     const button = document.createElement('button');
+
     button.type = 'button';
     button.setAttribute('data-docsautofill-type', 'DocsAutofill_button');
 
@@ -24,7 +18,33 @@ function createButton(onClick, text, size = {}) {
     if (size.height) button.style.height = size.height;
 
     if (typeof onClick === 'function') {
-        button.addEventListener('click', onClick);
+        button.addEventListener('click', async () => {
+            if (button.disabled) {
+                return;
+            }
+
+            button.disabled = true;
+            button.dataset.originalText = button.textContent;
+            button.textContent = 'Выполняется...';
+
+            if (options.lockScroll) {
+                lockUserScroll();
+            }
+
+            try {
+                await onClick();
+            } catch (error) {
+                NotificationService.error('Ошибка выполнения операции');
+                NotificationService.debug(error);
+            } finally {
+                if (options.lockScroll) {
+                    unlockUserScroll();
+                }
+
+                button.disabled = false;
+                button.textContent = button.dataset.originalText;
+            }
+        });
     }
 
     return button;
