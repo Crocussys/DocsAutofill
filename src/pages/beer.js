@@ -63,8 +63,13 @@ async function addCodes() {
             return;
         }
     } else {
+        window.scrollTo(0, 0);
+        await reactSleep(200);
+
         for (const item of codes) {
-            if (await isCodeExists(item.gtin)) {
+            const exists = await findCodeRow(item.gtin);
+
+            if (exists) {
                 continue;
             }
 
@@ -75,18 +80,44 @@ async function addCodes() {
     await addDates(codes);
 }
 
-function isCodeExists(gtin) {
+async function findCodeRow(gtin, timeoutMs = 10000) {
     const target = String(gtin).trim();
 
-    const rows = Array.from(document.querySelectorAll('div.DataRow'));
+    window.scrollTo(0, 0);
+    await reactSleep(200);
 
-    return rows.some(row => {
-        const cell = row.querySelector(
-            'div.DataCell-Content div.MuiBox-root'
-        );
+    const start = Date.now();
 
-        return cell?.textContent?.trim() === target;
-    });
+    while (Date.now() - start < timeoutMs) {
+        const rows = Array.from(document.querySelectorAll('div.DataRow'));
+
+        const row = rows.find(row => {
+            const cell = row.querySelector(
+                'div.DataCell-Content div.MuiBox-root'
+            );
+
+            return cell?.textContent?.trim() === target;
+        });
+
+        if (row) {
+            return row;
+        }
+
+        const oldScroll = window.scrollY;
+
+        window.scrollBy({
+            top: window.innerHeight * 0.8,
+            behavior: 'auto'
+        });
+
+        await reactSleep(300);
+
+        if (window.scrollY === oldScroll) {
+            break;
+        }
+    }
+
+    return null;
 }
 
 async function addCodesFromFile(codes) {
@@ -164,48 +195,8 @@ async function addCodeFromInput(item) {
     return true;
 }
 
-async function findCodeRow(gtin, timeoutMs = 10000) {
-    const target = String(gtin).trim();
-    const start = Date.now();
-
-    while (Date.now() - start < timeoutMs) {
-        const rows = Array.from(document.querySelectorAll('div.DataRow'));
-
-        const row = rows.find(row => {
-            const cell = row.querySelector(
-                'div.DataCell-Content div.MuiBox-root'
-            );
-
-            return cell?.textContent?.trim() === target;
-        });
-
-        if (row) {
-            return row;
-        }
-
-        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-
-        if (window.scrollY >= maxScroll) {
-            break;
-        }
-
-        window.scrollBy({
-            top: window.innerHeight * 0.8,
-            behavior: 'auto'
-        });
-
-        await reactSleep(200);
-    }
-
-    return null;
-}
-
 async function addDates(codes) {
-    window.scrollTo({
-        top: 0,
-        behavior: 'auto'
-    });
-
+    window.scrollTo(0, 0);
     await reactSleep(200);
 
     for (const item of codes) {
@@ -233,10 +224,7 @@ async function addDates(codes) {
         await reactSleep(100);
     }
 
-    window.scrollTo({
-        top: 0,
-        behavior: 'auto'
-    });
+    window.scrollTo(0, 0);
 }
 
 function addButton(btn) {
