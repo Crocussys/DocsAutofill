@@ -1,12 +1,35 @@
 ﻿function dataPars(data) {
-    const lines = data.replace(/^(?:\r?\n)+|(?:\r?\n)+$/g, '').split(/\r?\n/);
-    let codes = {};
+    try {
+        return JSON.parse(data);
+    } catch (_) {}
+
+    const result = [];
+
+    const lines = data
+        .replace(/^(?:\r?\n)+|(?:\r?\n)+$/g, '')
+        .split(/\r?\n/);
+
     for (const line of lines) {
         const elems = line.trim().split(/\s+/);
-        if (!elems[0] || !/^(\d{2})\.(\d{2})\.(\d{4})$/.test(elems[1])) continue;
-        codes[elems[0]] = elems[1];
+
+        if (elems.length === 1) {
+            result.push({
+                gtin: elems[0]
+            });
+        } else if (
+            elems.length === 2 &&
+            /^(\d{2})\.(\d{2})\.(\d{4})$/.test(elems[1])
+        ) {
+            result.push({
+                gtin: elems[0],
+                date: elems[1]
+            });
+        } else {
+            return null;
+        }
     }
-    return codes;
+
+    return result;
 }
 
 function createFile(codes) {
@@ -17,117 +40,101 @@ function createFile(codes) {
     return new File([blob], "codes.xlsx", { type: blob.type });
 }
 
-async function addDates() {
-    const data = await getDataFromClipboard(dataPars);
-    const codes = Object.keys(data);
-    const rows = Array.from(document.querySelectorAll('div.DataRow'));
-    const map = new Map();
-    for (const row of rows) {
-        const codeCell = row.querySelector('div.DataCell-Content div.MuiBox-root');
-        if (!codeCell) continue;
-        map.set(codeCell.textContent, row.dataset.index);
+async function addCodes() {
+    const codes = await getDataFromClipboard(dataPars);
+    if (!codes) return;
+
+    const rows = document.querySelectorAll('div.DataRow');
+
+    if (rows.length === 0) {
+        await addCodesFromFile(codes);
+    } else {
+        for (const item of codes) {
+            await addCodeFromInput(item);
+        }
     }
-    for (const code of codes) {
-        const data_index = map.get(code);
-        if (!data_index) continue;
-        const input = document.querySelector(`input[name="codes[${data_index}].connectDate"]`);
-        if (!input) continue;
-        setReactInputValue(input, data[code]);
-    }
+
+    await addDates(codes);
 }
 
-async function addCodes() {
+async function addCodesFromFile(codes) {
     const load_file_button = findButtonByText('Загрузить файл', false, this.parentElement);
     if (!load_file_button) return;
 
     load_file_button.click();
-    const codes = await getDataFromClipboard(dataPars);
+
     const dataTransfer = new DataTransfer();
-    dataTransfer.items.add(createFile(Object.keys(codes)));
+    dataTransfer.items.add(createFile(codes.map(item => item.gtin)));
+
     const input = document.querySelector('input[type="file"]');
     input.files = dataTransfer.files;
     input.dispatchEvent(new Event("change", { bubbles: true }));
 
     const footer = document.getElementsByClassName('CisDialog-Footer')[0];
+
     const load_button = await waitForButtonByText(footer, 'Загрузить', 5000, false);
     if (!load_button) return;
+
     load_button.click();
 
     const add_button = await waitForButtonByText(footer, 'Добавить', 5000, false);
     if (!add_button) return;
+
     add_button.click();
+
+    await waitForCodes(codes);
 }
 
-function getAddCodesButton() {
-    const btn = document.createElement("button");
-    btn.textContent = "Вставить коды";
-    btn.setAttribute('tabindex', "0");
-    btn.setAttribute('type', 'button');
-    btn.setAttribute('data-docsautofill-type', 'DocsAutofill_button');
-    btn.setAttribute('id', 'add-button');
-    btn.onclick = addCodes;
-    return btn;
+async function addCodeFromInput(item) {
+    const input = document.querySelector('input[name="codes"]');
+    if (!input) return;
+
+    setReactInputValue(input, item.gtin);
+
+    const option = await waitForElement('.MuiAutocomplete-option', 5000);
+    if (!option) return;
+
+    option.click();
+
+    await waitForCode(item.gtin);
 }
 
-function getFillDatesButton() {
-    const btn = document.createElement("button");
-    btn.textContent = "Вставить даты";
-    btn.setAttribute('tabindex', "0");
-    btn.setAttribute('type', 'button');
-    btn.setAttribute('data-docsautofill-type', 'DocsAutofill_button');
-    btn.setAttribute('id', 'fill-button');
-    btn.onclick = addDates;
-    return btn;
-}
+async function addDates(codes) {
+    for (const item of codes) {
+        if (!item.date) continue;
 
-function addButton(btn) {
-    const inscription = Array.from(document.querySelectorAll('h3')).find(h => h.innerText === 'Список кодов');
-    const container = inscription.parentElement.querySelector('.MuiStack-root');
-    const otherButton = container.getElementsByTagName('button')[0];
-    if (!otherButton) {
-        NotificationService.warn('Кнопки не найдены')
-        return;
+        await waitForCode(item.gtin);
+
+        const rows = Array.from(document.querySelectorAll('div.DataRow'));
+
+        const row = rows.find(row => {
+            const cell = row.querySelector('div.DataCell-Content div.MuiBox-root');
+            return cell?.textContent === item.gtin;
+        });
+
+        if (!row) continue;
+
+        const index = row.dataset.index;
+
+        const input = document.querySelector(
+            `input[name="codes[${index}].connectDate"]`
+        );
+
+        if (!input) continue;
+
+        setReactInputValue(input, item.date);
     }
-
-    container.appendChild(btn);
-
-    function syncClass() {
-        btn.className = otherButton.className;
-    }
-
-    syncClass();
-
-    let observerBtn = new MutationObserver(syncClass);
-    observerBtn.observe(otherButton, { attributes: true, attributeFilter: ['class'] });
-
-    let observerContainer = new MutationObserver(() => {
-        const newOther = container.getElementsByTagName('button')[0];
-        if (newOther && newOther !== otherButton) {
-            observerBtn.disconnect();
-            observerBtn = new MutationObserver(syncClass);
-            observerBtn.observe(newOther, { attributes: true, attributeFilter: ['class'] });
-        }
-    });
-    observerContainer.observe(container, { childList: true, subtree: true });
 }
 
 function init() {
-    const observer = new MutationObserver(() => {
-        if (!document.getElementById('add-button')) {
-            addButton(getAddCodesButton());
-        }
-
-        if (document.querySelector('div[role="rowgroup"]') && !document.getElementById('fill-button')) {
-            addButton(getFillDatesButton());
-        }
-    });
-
     observer.observe(document.body, { childList: true, subtree: true });
 
-    addButton(getAddCodesButton());
-    if (document.querySelector('div[role="rowgroup"]')) {
-        addButton(getFillDatesButton());
-    }
+    createButton({
+        id: 'add-button',
+        text: 'Вставить коды',
+        onClick: addCodes,
+        title: 'Список кодов'
+    });
 }
 
 if (document.readyState === 'loading') {
@@ -135,4 +142,3 @@ if (document.readyState === 'loading') {
 } else {
     init();
 }
-
