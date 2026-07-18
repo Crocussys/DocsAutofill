@@ -257,7 +257,7 @@ async function addDates(codes) {
     window.scrollTo(0, 0);
 }
 
-function addButton(btn) {
+function addButton() {
     const inscription = Array.from(document.querySelectorAll('h3'))
         .find(h => h.innerText === 'Список кодов');
 
@@ -266,7 +266,20 @@ function addButton(btn) {
     const container = inscription.parentElement.querySelector('.MuiStack-root');
     if (!container) return false;
 
-    container.appendChild(btn);
+    let btn = document.getElementById('add-button');
+
+    if (!btn) {
+        btn = createButton(addCodes, 'Вставить коды', {}, {
+            lockScroll: true
+        });
+        btn.id = 'add-button';
+    }
+
+    updateButtonState(btn);
+
+    if (btn.parentElement !== container) {
+        container.appendChild(btn);
+    }
 }
 
 async function checkInsertResult(codes) {
@@ -356,14 +369,14 @@ function ensureAddButton() {
 }
 
 function init() {
-    const observer = new MutationObserver(ensureAddButton);
+    const observer = new MutationObserver(addButton);
 
     observer.observe(document.body, {
         childList: true,
         subtree: true
     });
 
-    ensureAddButton();
+    addButton();
 }
 
 if (document.readyState === 'loading') {
