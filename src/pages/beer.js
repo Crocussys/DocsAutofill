@@ -307,8 +307,7 @@ async function checkInsertResult(codes) {
 
     let message =
         `Коды вставлены!\n` +
-        `GTIN: ${gtinSuccess}/${codes.length}\n` +
-        `Даты: ${dateSuccess}/${dateTotal}`;
+        `GTIN: ${gtinSuccess}/${codes.length}\n`;
 
     if (dateTotal > 0) {
         message += `Даты: ${dateSuccess}/${dateTotal}`;
@@ -342,6 +341,7 @@ function ensureAddButton() {
         lockScroll: true,
         operationFlag: 'beerOperationInProgress'
     });
+    updateButtonState(btn);
 
     btn.id = 'add-button';
 

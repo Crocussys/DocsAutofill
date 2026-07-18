@@ -6,6 +6,9 @@ function createButton(onClick, text, size = {}, options = {}) {
 
     button.textContent = text;
 
+    button.dataset.normalText = text;
+    button.dataset.busyText = options.busyText || 'Выполняется...';
+
     button.style.backgroundColor = '#1e88e5';
     button.style.color = '#ffffff';
     button.style.border = 'none';
@@ -31,15 +34,7 @@ function createButton(onClick, text, size = {}, options = {}) {
                 window[options.operationFlag] = true;
             }
 
-            button.disabled = true;
-
-            const originalText = button.textContent;
-            const originalBackground = button.style.backgroundColor;
-            const originalCursor = button.style.cursor;
-
-            button.textContent = 'Выполняется...';
-            button.style.backgroundColor = '#9e9e9e';
-            button.style.cursor = 'wait';
+            updateButtonState(button);
 
             await reactSleep(0);
 
@@ -61,10 +56,7 @@ function createButton(onClick, text, size = {}, options = {}) {
                     window[options.operationFlag] = false;
                 }
 
-                button.disabled = false;
-                button.textContent = originalText;
-                button.style.backgroundColor = originalBackground;
-                button.style.cursor = originalCursor;
+                updateButtonState(button);
             }
         });
     }
@@ -156,4 +148,15 @@ async function waitForButtonByText(container, text, timeoutMs = 5000, exact = fa
         await new Promise(resolve => setTimeout(resolve, pollMs));
     }
     return null;
+}
+
+function updateButtonState(button) {
+    const busy = window.beerOperationInProgress;
+
+    button.disabled = busy;
+    button.textContent = busy
+        ? button.dataset.busyText
+        : button.dataset.normalText;
+    button.style.backgroundColor = busy ? '#9e9e9e' : '#1e88e5';
+    button.style.cursor = busy ? 'wait' : 'pointer';
 }

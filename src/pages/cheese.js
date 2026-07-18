@@ -468,6 +468,7 @@ function init() {
             if (!button) {
                 button = createButton(config.onClick, config.text, config.size);
                 button.id = config.id;
+                updateButtonState(button);
             }
             if (button.parentElement !== wrapper) {
                 wrapper.appendChild(button);
