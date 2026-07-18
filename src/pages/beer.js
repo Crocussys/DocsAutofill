@@ -78,6 +78,7 @@ async function addCodes() {
     }
 
     await addDates(codes);
+    await checkInsertResult(codes);
 }
 
 async function findCodeRow(gtin, timeoutMs = 15000) {
@@ -272,6 +273,67 @@ function addButton(btn) {
     if (!container) return false;
 
     container.appendChild(btn);
+}
+
+async function checkInsertResult(codes) {
+    let gtinSuccess = 0;
+    let gtinFailed = [];
+
+    let dateTotal = 0;
+    let dateSuccess = 0;
+    let dateFailed = [];
+
+    for (const item of codes) {
+        const row = await findCodeRow(item.gtin);
+
+        if (row) {
+            gtinSuccess++;
+
+            if (item.date) {
+                dateTotal++;
+
+                const index = row.dataset.index;
+                const input = document.querySelector(`input[name="codes[${index}].connectDate"]`);
+
+                if (input?.value === item.date) {
+                    dateSuccess++;
+                } else {
+                    dateFailed.push(item.gtin);
+                }
+            }
+        } else {
+            gtinFailed.push(item.gtin);
+
+            if (item.date) {
+                dateTotal++;
+                dateFailed.push(item.gtin);
+            }
+        }
+    }
+
+    let message = `GTIN: ${gtinSuccess}/${codes.length}\n`;
+
+    if (dateTotal > 0) {
+        message += `Даты: ${dateSuccess}/${dateTotal}`;
+    }
+
+    if (gtinFailed.length > 0) {
+        NotificationService.warn(
+            `Не вставлены GTIN (${gtinFailed.length}):\n${gtinFailed.join(', ')}`
+        );
+    }
+
+    if (dateFailed.length > 0) {
+        NotificationService.warn(
+            `Не вставлены даты (${dateFailed.length}):\n${dateFailed.join(', ')}`
+        );
+    }
+
+    if (gtinFailed.length === 0 && dateFailed.length === 0) {
+        NotificationService.info(message);
+    } else {
+        NotificationService.warn(message);
+    }
 }
 
 function init() {
