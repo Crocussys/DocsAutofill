@@ -240,3 +240,21 @@ async function waitForCodes(codes, timeoutMs = 10000) {
     NotificationService.warn('Не все коды появились в таблице');
     return false;
 }
+
+async function waitForGtinInput(timeoutMs = 5000) {
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+        const inputs = Array.from(document.querySelectorAll('input'));
+
+        const input = inputs.find(input => !input.name);
+
+        if (input) {
+            return input;
+        }
+
+        await reactSleep(50);
+    }
+
+    return null;
+}

@@ -125,9 +125,7 @@ async function addCodesFromFile(codes) {
 }
 
 async function addCodeFromInput(item) {
-    const inputName = 'codes';
-
-    const input = await waitForStableInputByName(inputName);
+    const input = await waitForGtinInput();
 
     if (!input) {
         NotificationService.error('Поле добавления кода не найдено');
@@ -136,10 +134,10 @@ async function addCodeFromInput(item) {
 
     setReactInputValue(input, item.gtin);
 
-    const option = await waitForGtinOption(inputName, item.gtin);
+    const option = await waitForAutocompleteOption(input, item.gtin);
 
     if (!option || option.multiple) {
-        NotificationService.error(`Не найден единственный вариант для ${item.gtin}`);
+        NotificationService.error(`Не найден вариант для ${item.gtin}`);
         return false;
     }
 
