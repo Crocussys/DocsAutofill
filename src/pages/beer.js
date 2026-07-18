@@ -83,9 +83,6 @@ async function addCodes() {
 async function findCodeRow(gtin, timeoutMs = 10000) {
     const target = String(gtin).trim();
 
-    window.scrollTo(0, 0);
-    await reactSleep(200);
-
     const start = Date.now();
 
     while (Date.now() - start < timeoutMs) {
@@ -103,16 +100,16 @@ async function findCodeRow(gtin, timeoutMs = 10000) {
             return row;
         }
 
-        const oldScroll = window.scrollY;
+        await reactSleep(200);
 
-        window.scrollBy({
-            top: window.innerHeight * 0.8,
-            behavior: 'auto'
-        });
+        const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
 
-        await reactSleep(300);
-
-        if (window.scrollY === oldScroll) {
+        if (window.scrollY < maxScroll) {
+            window.scrollBy({
+                top: window.innerHeight * 0.8,
+                behavior: 'auto'
+            });
+        } else {
             break;
         }
     }
@@ -197,7 +194,8 @@ async function addCodeFromInput(item) {
 
 async function addDates(codes) {
     window.scrollTo(0, 0);
-    await reactSleep(200);
+
+    await reactSleep(1000);
 
     for (const item of codes) {
         if (!item.date) {
