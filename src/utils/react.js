@@ -199,3 +199,26 @@ async function selectMuiOptionByName(inputName, value) {
     NotificationService.warn(`MUI option not found or not set: ${inputName}=${targetValue}`);
     return false;
 }
+
+async function waitForCode(gtin, timeoutMs = 5000) {
+    const target = String(gtin).trim();
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+        const rows = Array.from(document.querySelectorAll('div.DataRow'));
+
+        const exists = rows.some(row => {
+            const cell = row.querySelector('div.DataCell-Content div.MuiBox-root');
+            return cell?.textContent?.trim() === target;
+        });
+
+        if (exists) {
+            return true;
+        }
+
+        await reactSleep(50);
+    }
+
+    NotificationService.warn(`Код не появился в таблице: ${target}`);
+    return false;
+}

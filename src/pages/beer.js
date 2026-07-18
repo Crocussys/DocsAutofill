@@ -57,7 +57,11 @@ async function addCodes() {
     const rows = document.querySelectorAll('div.DataRow');
 
     if (rows.length === 0) {
-        await addCodesFromFile(codes);
+        const success = await addCodesFromFile(codes);
+
+        if (!success) {
+            return;
+        }
     } else {
         for (const item of codes) {
             await addCodeFromInput(item);
@@ -68,22 +72,22 @@ async function addCodes() {
 }
 
 async function addCodesFromFile(codes) {
-    const load_file_button = findButtonByText('Загрузить файл', false, this.parentElement);
+    const load_file_button = findButtonByText('Загрузить файл', false);
 
     if (!load_file_button) {
         NotificationService.error('Кнопка "Загрузить файл" не найдена');
-        return;
+        return false;
     }
 
     load_file_button.click();
     const dataTransfer = new DataTransfer();
     dataTransfer.items.add(createFile(codes.map(item => item.gtin)));
 
-    const input = document.querySelector('input[type="file"]');
+    const input = await waitForElement('input[type="file"]', 5000);
 
     if (!input) {
         NotificationService.error('Input файла не найден');
-        return;
+        return false;
     }
 
     input.files = dataTransfer.files;
@@ -95,7 +99,7 @@ async function addCodesFromFile(codes) {
 
     if (!load_button) {
         NotificationService.error('Кнопка "Загрузить" не найдена');
-        return;
+        return false;
     }
 
     load_button.click();
@@ -104,41 +108,48 @@ async function addCodesFromFile(codes) {
 
     if (!add_button) {
         NotificationService.error('Кнопка "Добавить" не найдена');
-        return;
+        return false;
     }
 
     add_button.click();
 
     await waitForCodes(codes);
+    return true;
 }
 
 async function addCodeFromInput(item) {
-    const input = document.querySelector('input[name="codes"]');
+    const inputName = 'codes';
+
+    const input = await waitForStableInputByName(inputName);
 
     if (!input) {
         NotificationService.error('Поле добавления кода не найдено');
-        return;
+        return false;
     }
 
     setReactInputValue(input, item.gtin);
 
-    const option = await waitForElement('.MuiAutocomplete-option', 5000);
+    const option = await waitForGtinOption(inputName, item.gtin);
 
-    if (!option) {
-        NotificationService.error(`Вариант для ${item.gtin} не найден`);
-        return;
+    if (!option || option.multiple) {
+        NotificationService.error(`Не найден единственный вариант для ${item.gtin}`);
+        return false;
     }
 
     option.click();
 
-    await waitForCode(item.gtin);
+    return await waitForCode(item.gtin);
 }
 
 async function addDates(codes) {
     for (const item of codes) {
         if (!item.date) continue;
 
-        await waitForCode(item.gtin);
+        const exists = await waitForCode(item.gtin);
+
+        if (!exists) {
+            continue;
+        }
 
         const rows = Array.from(document.querySelectorAll('div.DataRow'));
 
