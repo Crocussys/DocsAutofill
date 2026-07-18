@@ -171,17 +171,10 @@ function addButton(btn) {
     const inscription = Array.from(document.querySelectorAll('h3'))
         .find(h => h.innerText === 'Список кодов');
 
-    if (!inscription) {
-        NotificationService.error('Заголовок "Список кодов" не найден');
-        return;
-    }
+    if (!inscription) return false;
 
     const container = inscription.parentElement.querySelector('.MuiStack-root');
-
-    if (!container) {
-        NotificationService.error('Контейнер кнопок не найден');
-        return;
-    }
+    if (!container) return false;
 
     container.appendChild(btn);
 }
@@ -191,6 +184,7 @@ function init() {
         if (!document.getElementById('add-button')) {
             const btn = createButton(addCodes, 'Вставить коды');
             btn.id = 'add-button';
+
             addButton(btn);
         }
     });
@@ -200,11 +194,9 @@ function init() {
         subtree: true
     });
 
-    if (!document.getElementById('add-button')) {
-        const btn = createButton(addCodes, 'Вставить коды');
-        btn.id = 'add-button';
-        addButton(btn);
-    }
+    const btn = createButton(addCodes, 'Вставить коды');
+    btn.id = 'add-button';
+    addButton(btn);
 }
 
 if (document.readyState === 'loading') {
