@@ -343,9 +343,9 @@ function ensureAddButton() {
 
     btn.id = 'add-button';
 
-    updateButtonState(btn);
-
     addButton(btn);
+
+    updateButtonState(btn);
 }
 
 function init() {

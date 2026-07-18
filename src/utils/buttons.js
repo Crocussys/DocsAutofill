@@ -60,7 +60,13 @@ function createButton(onClick, text, size = {}, options = {}) {
                     window[options.operationFlag] = false;
                 }
 
-                updateButtonState(button);
+                requestAnimationFrame(() => {
+                    const currentButton = document.getElementById(button.id);
+
+                    if (currentButton) {
+                        updateButtonState(currentButton);
+                    }
+                });
             }
         });
     }
