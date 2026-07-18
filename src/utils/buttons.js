@@ -9,6 +9,10 @@ function createButton(onClick, text, size = {}, options = {}) {
     button.dataset.normalText = text;
     button.dataset.busyText = options.busyText || 'Выполняется...';
 
+    if (options.operationFlag) {
+        button.dataset.operationFlag = options.operationFlag;
+    }
+
     button.style.backgroundColor = '#1e88e5';
     button.style.color = '#ffffff';
     button.style.border = 'none';
@@ -151,12 +155,14 @@ async function waitForButtonByText(container, text, timeoutMs = 5000, exact = fa
 }
 
 function updateButtonState(button) {
-    const busy = window.beerOperationInProgress;
+    const flag = button.dataset.operationFlag;
+    const busy = flag ? window[flag] : false;
 
     button.disabled = busy;
     button.textContent = busy
         ? button.dataset.busyText
         : button.dataset.normalText;
+
     button.style.backgroundColor = busy ? '#9e9e9e' : '#1e88e5';
     button.style.cursor = busy ? 'wait' : 'pointer';
 }

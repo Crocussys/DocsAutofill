@@ -1,7 +1,4 @@
-﻿let isAddingCodes = false;
-
-
-function dataPars(data) {
+﻿function dataPars(data) {
     try {
         return JSON.parse(data);
     } catch (_) {}
@@ -199,6 +196,8 @@ async function addCodesFromFile(codes) {
 
     add_button.click();
 
+    await waitForCodes(codes);
+
     return true;
 }
 
@@ -257,7 +256,7 @@ async function addDates(codes) {
     window.scrollTo(0, 0);
 }
 
-function addButton() {
+function addButton(btn) {
     const inscription = Array.from(document.querySelectorAll('h3'))
         .find(h => h.innerText === 'Список кодов');
 
@@ -266,20 +265,7 @@ function addButton() {
     const container = inscription.parentElement.querySelector('.MuiStack-root');
     if (!container) return false;
 
-    let btn = document.getElementById('add-button');
-
-    if (!btn) {
-        btn = createButton(addCodes, 'Вставить коды', {}, {
-            lockScroll: true
-        });
-        btn.id = 'add-button';
-    }
-
-    updateButtonState(btn);
-
-    if (btn.parentElement !== container) {
-        container.appendChild(btn);
-    }
+    container.appendChild(btn);
 }
 
 async function checkInsertResult(codes) {
@@ -320,10 +306,10 @@ async function checkInsertResult(codes) {
 
     let message =
         `Коды вставлены!\n` +
-        `GTIN: ${gtinSuccess}/${codes.length}\n`;
+        `GTIN: ${gtinSuccess}/${codes.length}`;
 
     if (dateTotal > 0) {
-        message += `Даты: ${dateSuccess}/${dateTotal}`;
+        message += `\nДаты: ${dateSuccess}/${dateTotal}`;
     }
 
     if (gtinFailed.length > 0) {
@@ -354,29 +340,25 @@ function ensureAddButton() {
         lockScroll: true,
         operationFlag: 'beerOperationInProgress'
     });
-    updateButtonState(btn);
 
     btn.id = 'add-button';
 
-    if (window.beerOperationInProgress) {
-        btn.disabled = true;
-        btn.textContent = 'Выполняется...';
-        btn.style.backgroundColor = '#9e9e9e';
-        btn.style.cursor = 'wait';
-    }
+    updateButtonState(btn);
 
     addButton(btn);
 }
 
 function init() {
-    const observer = new MutationObserver(addButton);
+    const observer = new MutationObserver(() => {
+        ensureAddButton();
+    });
 
     observer.observe(document.body, {
         childList: true,
         subtree: true
     });
 
-    addButton();
+    ensureAddButton();
 }
 
 if (document.readyState === 'loading') {
