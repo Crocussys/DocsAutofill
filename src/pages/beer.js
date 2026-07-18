@@ -64,11 +64,29 @@ async function addCodes() {
         }
     } else {
         for (const item of codes) {
+            if (await isCodeExists(item.gtin)) {
+                continue;
+            }
+
             await addCodeFromInput(item);
         }
     }
 
     await addDates(codes);
+}
+
+function isCodeExists(gtin) {
+    const target = String(gtin).trim();
+
+    const rows = Array.from(document.querySelectorAll('div.DataRow'));
+
+    return rows.some(row => {
+        const cell = row.querySelector(
+            'div.DataCell-Content div.MuiBox-root'
+        );
+
+        return cell?.textContent?.trim() === target;
+    });
 }
 
 async function addCodesFromFile(codes) {
