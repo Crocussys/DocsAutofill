@@ -79,6 +79,14 @@ async function addCodesFromFile(codes) {
         return false;
     }
 
+    if (
+        load_file_button.disabled ||
+        load_file_button.getAttribute('aria-disabled') === 'true'
+    ) {
+        NotificationService.error('Сначала введите адрес');
+        return false;
+    }
+
     load_file_button.click();
     const dataTransfer = new DataTransfer();
     dataTransfer.items.add(createFile(codes.map(item => item.gtin)));
