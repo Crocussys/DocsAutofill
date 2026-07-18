@@ -165,14 +165,26 @@ async function addCodeFromInput(item) {
 }
 
 async function addDates(codes) {
-    for (let i = 0; i < codes.length; i++) {
-        const item = codes[i];
-
+    for (const item of codes) {
         if (!item.date) {
             continue;
         }
 
-        const input = await waitForInputByName(`codes[${i}].connectDate`, 5000);
+        const rows = Array.from(document.querySelectorAll('div.DataRow'));
+
+        const row = rows.find(row => {
+            const cell = row.querySelector('div.DataCell-Content div.MuiBox-root');
+
+            return cell?.textContent?.trim() === item.gtin;
+        });
+
+        if (!row) {
+            NotificationService.error(`Строка ${item.gtin} не найдена`);
+            continue;
+        }
+
+        const index = row.dataset.index;
+        const input = await waitForInputByName(`codes[${index}].connectDate`, 5000);
 
         if (!input) {
             NotificationService.error(`Поле даты для ${item.gtin} не найдено`);
