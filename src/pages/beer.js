@@ -72,6 +72,7 @@ async function addCodes() {
     }
 
     await addDates(codes);
+    await checkInsertResult(codes);
 }
 
 async function findCodeRow(gtin, timeoutMs = 15000) {

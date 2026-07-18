@@ -24,8 +24,16 @@ function createButton(onClick, text, size = {}, options = {}) {
             }
 
             button.disabled = true;
-            button.dataset.originalText = button.textContent;
+
+            const originalText = button.textContent;
+            const originalBackground = button.style.backgroundColor;
+            const originalCursor = button.style.cursor;
+
             button.textContent = 'Выполняется...';
+            button.style.backgroundColor = '#9e9e9e';
+            button.style.cursor = 'wait';
+
+            await reactSleep(0);
 
             if (options.lockScroll) {
                 lockUserScroll();
@@ -42,7 +50,9 @@ function createButton(onClick, text, size = {}, options = {}) {
                 }
 
                 button.disabled = false;
-                button.textContent = button.dataset.originalText;
+                button.textContent = originalText;
+                button.style.backgroundColor = originalBackground;
+                button.style.cursor = originalCursor;
             }
         });
     }
