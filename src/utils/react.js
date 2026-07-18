@@ -83,6 +83,49 @@ async function waitForStableInputByName(inputName, timeoutMs = 7000, stableMs = 
     return null;
 }
 
+async function waitForAutocompleteOption(input, value, timeoutMs = 8000) {
+    const targetValue = String(value).trim();
+    const start = Date.now();
+
+    while (Date.now() - start < timeoutMs) {
+        const listboxId = input.getAttribute('aria-controls') ||
+                          input.getAttribute('aria-owns');
+
+        let listbox = listboxId
+            ? document.getElementById(listboxId)
+            : null;
+
+        if (!listbox) {
+            listbox = document.querySelector('ul[role="listbox"]');
+        }
+
+        if (listbox) {
+            const options = Array.from(
+                listbox.querySelectorAll('li[role="option"]')
+            );
+
+            const exact = options.find(option => {
+                const dataValue = option.getAttribute('data-value')?.trim() ?? '';
+                const text = option.textContent?.trim() ?? '';
+
+                return dataValue === targetValue || text === targetValue;
+            });
+
+            if (exact) {
+                return exact;
+            }
+
+            if (options.length === 1) {
+                return options[0];
+            }
+        }
+
+        await reactSleep(50);
+    }
+
+    return null;
+}
+
 async function waitForAutocompleteOptionByValue(inputName, value, timeoutMs = 8000) {
     const targetValue = String(value).trim();
     const findOption = (input) => {
