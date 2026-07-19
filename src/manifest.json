@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "DocsAutofill",
-  "version": "3.1",
+  "version": "3.2",
   "description": "Автоматическое заполнение документов для честного знака",
   "permissions": ["clipboardRead"],
   "content_scripts": [
